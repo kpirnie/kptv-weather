@@ -51,6 +51,7 @@ RUN mkdir -p /dev/dri && \
 COPY entrypoint.sh /opt/weather/entrypoint.sh
 RUN chmod +x /opt/weather/entrypoint.sh
 
+ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 USER kptv
 WORKDIR /opt/weather
 

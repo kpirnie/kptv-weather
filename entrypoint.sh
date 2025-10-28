@@ -50,34 +50,60 @@ mkdir -p "$HLS_PATH"
 if [ -c /dev/dri/renderD128 ] && vainfo &>/dev/null; then
     echo "[INFO] VA-API GPU detected."
     HW_ENCODER="hevc_vaapi"
-    HW_FLAGS="-vf 'format=nv12,hwupload'"
+    HW_FLAGS="-vaapi_device /dev/dri/renderD128 -vf 'format=nv12,hwupload'"
 else
     echo "[INFO] No VA-API GPU detected. Using CPU HEVC."
     HW_ENCODER="libx265"
-    HW_FLAGS=""
+    HW_FLAGS="-preset ultrafast"
 fi
 
 # -----------------------------
-# Start FFmpeg HLS in background
-# -----------------------------
-FRAME_FIFO=/tmp/frames.y4m
-rm -f "$FRAME_FIFO"
-mkfifo "$FRAME_FIFO"
-
-ffmpeg -y -f yuv4mpegpipe -r $FRAMERATE -i "$FRAME_FIFO" \
-    -c:v $HW_ENCODER -b:v $BITRATE $HW_FLAGS -pix_fmt yuv420p \
-    -f hls -hls_time 5 -hls_list_size 5 -hls_flags delete_segments \
-    "$HLS_PATH/$HLS_NAME" &
-
-# -----------------------------
-# Continuous Chromium capture -> stdout -> FFmpeg
+# Continuous screenshot capture loop -> FFmpeg HLS
 # -----------------------------
 echo "[INFO] Starting smooth continuous live stream..."
 
 while true; do
-    # Chromium headless renders directly to stdout as PNG
-    $CHROMIUM_BIN --headless --disable-gpu --window-size=${VIDEO_SIZE} \
-        --virtual-time-budget=500 --no-sandbox --screenshot-to-stdout "$URL" \
-    | ffmpeg -hide_banner -loglevel error -f image2pipe -r $FRAMERATE -i - \
-        -pix_fmt yuv420p -f yuv4mpegpipe "$FRAME_FIFO"
+    $CHROMIUM_BIN \
+        --headless=new \
+        --disable-gpu \
+        --no-sandbox \
+        --disable-dev-shm-usage \
+        --disable-software-rasterizer \
+        --window-size=${VIDEO_SIZE} \
+        --virtual-time-budget=1000 \
+        --disable-features=AudioServiceOutOfProcess \
+        --disable-background-networking \
+        --disable-background-timer-throttling \
+        --disable-backgrounding-occluded-windows \
+        --disable-breakpad \
+        --disable-component-extensions-with-background-pages \
+        --disable-extensions \
+        --disable-features=TranslateUI \
+        --disable-ipc-flooding-protection \
+        --disable-renderer-backgrounding \
+        --enable-features=NetworkService,NetworkServiceInProcess \
+        --hide-scrollbars \
+        --metrics-recording-only \
+        --mute-audio \
+        --no-first-run \
+        --screenshot=/tmp/screenshot.png \
+        "$URL" 2>/dev/null
+    
+    # Check if screenshot was created
+    if [ -f /tmp/screenshot.png ]; then
+        # Convert screenshot to video frame and stream to FFmpeg
+        ffmpeg -hide_banner -loglevel error \
+            -loop 1 -i /tmp/screenshot.png \
+            -t $(echo "scale=2; 1/$FRAMERATE" | bc) \
+            -c:v $HW_ENCODER -b:v $BITRATE $HW_FLAGS -pix_fmt yuv420p \
+            -f hls -hls_time 5 -hls_list_size 5 \
+            -hls_flags delete_segments+append_list \
+            -hls_segment_filename "$HLS_PATH/segment_%03d.ts" \
+            "$HLS_PATH/$HLS_NAME" 2>/dev/null
+        
+        rm -f /tmp/screenshot.png
+    else
+        echo "[WARN] Screenshot failed, retrying..."
+        sleep 1
+    fi
 done
