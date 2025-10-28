@@ -1,0 +1,14 @@
+services:
+  kptv_weather:
+    image: localhost/kptv_weather:latest
+    container_name: kptv_weather
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    ports:
+      - 9600:8080/tcp
+    environment:
+      - LATLONQUERY=01030, Feeding Hills, MA, USA
+      - TXTLOCATION=01030, Feeding Hills, MA, USA
+      - LATLON=42.0738,-72.6733
+      - UNITS=us
