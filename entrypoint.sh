@@ -38,9 +38,9 @@ echo "[INFO] Weather stream URL: $URL"
 # -----------------------------
 PORT=8080
 FRAMERATE=24
-BITRATE=1200k  # Reduced for better encoding speed
+BITRATE=1024k  # Reduced for better encoding speed
 BUFSIZE=4096k
-VIDEO_SIZE="1280x720"
+VIDEO_SIZE="854x480"
 HLS_PATH="/opt/weather/hls"
 HLS_NAME="playlist.m3u8"
 DISPLAY_NUM=99
@@ -118,15 +118,14 @@ ffmpeg \
     -video_size $VIDEO_SIZE \
     -framerate $FRAMERATE \
     -i :$DISPLAY_NUM \
-    -c:v libx265 \
-    -preset veryfast \
-    -x265-params keyint=60:min-keyint=60:scenecut=0 \
+    -c:v libx264 \
+    -preset ultrafast \
+    -tune zerolatency \
     -b:v $BITRATE \
     -maxrate $BITRATE \
     -bufsize $BUFSIZE \
     -pix_fmt yuv420p \
-    -g 60 \
-    -tag:v hvc1 \
+    -g 48 \
     -f hls \
     -hls_time 6 \
     -hls_list_size 10 \
