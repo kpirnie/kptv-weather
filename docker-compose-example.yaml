@@ -1,0 +1,14 @@
+services:
+  kptest:
+    image: ghcr.io/kpirnie/kptv-weather:latest
+    container_name: kptest
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - 8080:8080/tcp
+    environment:
+      - SOURCE=https://yoursource.url
+      - LATLONQUERY=01030, Feeding Hills, MA, USA
+      - TXTLOCATION=01030, Feeding Hills, MA, USA
+      - LATLON=42.0738,-72.6733
+      - UNITS=us
