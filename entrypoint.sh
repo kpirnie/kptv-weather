@@ -4,8 +4,8 @@ set -e
 # -----------------------------
 # Environment variables
 # -----------------------------
-if [ -z "$LATLONQUERY" ] || [ -z "$TXTLOCATION" ] || [ -z "$LATLON" ] || [ -z "$UNITS" ]; then
-    echo "[ERROR] Please set LATLONQUERY, TXTLOCATION, LATLON, and UNITS environment variables."
+if [ -z "$SOURCE" ] || [ -z "$LATLONQUERY" ] || [ -z "$TXTLOCATION" ] || [ -z "$LATLON" ] || [ -z "$UNITS" ]; then
+    echo "[ERROR] Please set SOURCE, LATLONQUERY, TXTLOCATION, LATLON, and UNITS environment variables."
     exit 1
 fi
 
@@ -29,7 +29,7 @@ LATLONQUERY_ENC=$(urlencode "$LATLONQUERY")
 TXTLOCATION_ENC=$(urlencode "$TXTLOCATION")
 LATLON_ENC=$(urlencode "{\"lat\":${LATLON%,*},\"lon\":${LATLON#*,}}")
 
-URL="https://weather.kevp.us/index.html?settings-wide-checkbox=true&settings-kiosk-checkbox=true&travel-checkbox=true&extended-forecast-checkbox=true&regional-forecast-checkbox=true&latLonQuery=${LATLONQUERY_ENC}&settings-stickyKiosk-checkbox=false&hourly-graph-checkbox=true&settings-units-select=${UNITS}&latLon=${LATLON_ENC}&settings-speed-select=1.00&hazards-checkbox=true&current-weather-checkbox=true&hourly-checkbox=true&settings-customFeedEnable-checkbox=true&almanac-checkbox=true&radar-checkbox=true&settings-scanLineMode-select=auto&local-forecast-checkbox=true&txtLocation=${TXTLOCATION_ENC}&latest-observations-checkbox=true&settings-scanLines-checkbox=false&spc-outlook-checkbox=true"
+URL="$SOURCE/index.html?settings-wide-checkbox=true&settings-kiosk-checkbox=true&travel-checkbox=true&extended-forecast-checkbox=true&regional-forecast-checkbox=true&latLonQuery=${LATLONQUERY_ENC}&settings-stickyKiosk-checkbox=false&hourly-graph-checkbox=true&settings-units-select=${UNITS}&latLon=${LATLON_ENC}&settings-speed-select=1.00&hazards-checkbox=true&current-weather-checkbox=true&hourly-checkbox=true&settings-customFeedEnable-checkbox=true&almanac-checkbox=true&radar-checkbox=true&settings-scanLineMode-select=auto&local-forecast-checkbox=true&txtLocation=${TXTLOCATION_ENC}&latest-observations-checkbox=true&settings-scanLines-checkbox=false&spc-outlook-checkbox=true"
 
 echo "[INFO] Weather stream URL: $URL"
 
@@ -37,73 +37,100 @@ echo "[INFO] Weather stream URL: $URL"
 # Stream settings
 # -----------------------------
 PORT=8080
-FRAMERATE=30
-BITRATE=1500k
+FRAMERATE=24
+BITRATE=1200k  # Reduced for better encoding speed
+BUFSIZE=4096k
 VIDEO_SIZE="1280x720"
 HLS_PATH="/opt/weather/hls"
 HLS_NAME="playlist.m3u8"
+DISPLAY_NUM=99
+
 mkdir -p "$HLS_PATH"
 
+# Clean up any old X locks
+rm -f /tmp/.X${DISPLAY_NUM}-lock /tmp/.X11-unix/X${DISPLAY_NUM} 2>/dev/null || true
+
 # -----------------------------
-# Detect VA-API GPU
+# Start HTTP server in background
 # -----------------------------
-if [ -c /dev/dri/renderD128 ] && vainfo &>/dev/null; then
-    echo "[INFO] VA-API GPU detected."
-    HW_ENCODER="hevc_vaapi"
-    HW_FLAGS="-vaapi_device /dev/dri/renderD128 -vf 'format=nv12,hwupload'"
-else
-    echo "[INFO] No VA-API GPU detected. Using CPU HEVC."
-    HW_ENCODER="libx265"
-    HW_FLAGS="-preset ultrafast"
+echo "[INFO] Starting HTTP server on port $PORT..."
+cd /opt/weather
+python3 -m http.server $PORT &
+HTTP_PID=$!
+
+sleep 2
+echo "[INFO] HTTP server started. Stream will be available at: http://localhost:$PORT/hls/$HLS_NAME"
+
+# -----------------------------
+# Start Xvfb (virtual display)
+# -----------------------------
+echo "[INFO] Starting virtual display :$DISPLAY_NUM at ${VIDEO_SIZE}..."
+Xvfb :$DISPLAY_NUM -screen 0 ${VIDEO_SIZE}x24 -ac -nolisten tcp -nolisten unix &
+XVFB_PID=$!
+export DISPLAY=:$DISPLAY_NUM
+
+sleep 3
+
+# Verify Xvfb is running
+if ! xdpyinfo -display :$DISPLAY_NUM >/dev/null 2>&1; then
+    echo "[ERROR] Xvfb failed to start properly"
+    exit 1
 fi
 
-# -----------------------------
-# Continuous screenshot capture loop -> FFmpeg HLS
-# -----------------------------
-echo "[INFO] Starting smooth continuous live stream..."
+echo "[INFO] Virtual display ready"
 
-while true; do
-    $CHROMIUM_BIN \
-        --headless=new \
-        --disable-gpu \
-        --no-sandbox \
-        --disable-dev-shm-usage \
-        --disable-software-rasterizer \
-        --window-size=${VIDEO_SIZE} \
-        --virtual-time-budget=1000 \
-        --disable-features=AudioServiceOutOfProcess \
-        --disable-background-networking \
-        --disable-background-timer-throttling \
-        --disable-backgrounding-occluded-windows \
-        --disable-breakpad \
-        --disable-component-extensions-with-background-pages \
-        --disable-extensions \
-        --disable-features=TranslateUI \
-        --disable-ipc-flooding-protection \
-        --disable-renderer-backgrounding \
-        --enable-features=NetworkService,NetworkServiceInProcess \
-        --hide-scrollbars \
-        --metrics-recording-only \
-        --mute-audio \
-        --no-first-run \
-        --screenshot=/tmp/screenshot.png \
-        "$URL" 2>/dev/null
-    
-    # Check if screenshot was created
-    if [ -f /tmp/screenshot.png ]; then
-        # Convert screenshot to video frame and stream to FFmpeg
-        ffmpeg -hide_banner -loglevel error \
-            -loop 1 -i /tmp/screenshot.png \
-            -t $(echo "scale=2; 1/$FRAMERATE" | bc) \
-            -c:v $HW_ENCODER -b:v $BITRATE $HW_FLAGS -pix_fmt yuv420p \
-            -f hls -hls_time 5 -hls_list_size 5 \
-            -hls_flags delete_segments+append_list \
-            -hls_segment_filename "$HLS_PATH/segment_%03d.ts" \
-            "$HLS_PATH/$HLS_NAME" 2>/dev/null
-        
-        rm -f /tmp/screenshot.png
-    else
-        echo "[WARN] Screenshot failed, retrying..."
-        sleep 1
-    fi
-done
+# -----------------------------
+# Start Chromium in kiosk mode
+# -----------------------------
+echo "[INFO] Starting Chromium in kiosk mode..."
+$CHROMIUM_BIN \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --disable-software-rasterizer \
+    --disable-gpu \
+    --no-proxy-server \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=TranslateUI \
+    --start-maximized \
+    --window-size=${VIDEO_SIZE} \
+    --window-position=0,0 \
+    --force-device-scale-factor=1 \
+    "$URL" 2>/dev/null &
+CHROME_PID=$!
+
+echo "[INFO] Waiting for Chromium to fully load..."
+sleep 3
+
+# -----------------------------
+# Start FFmpeg continuous capture with HEVC
+# -----------------------------
+echo "[INFO] Starting continuous HLS stream capture at ${FRAMERATE}fps (HEVC/CPU veryfast)..."
+
+# Trap to cleanup
+trap "kill $CHROME_PID $XVFB_PID $HTTP_PID 2>/dev/null; exit" INT TERM
+
+ffmpeg \
+    -f x11grab \
+    -draw_mouse 0 \
+    -video_size $VIDEO_SIZE \
+    -framerate $FRAMERATE \
+    -i :$DISPLAY_NUM \
+    -c:v libx265 \
+    -preset veryfast \
+    -x265-params keyint=60:min-keyint=60:scenecut=0 \
+    -b:v $BITRATE \
+    -maxrate $BITRATE \
+    -bufsize $BUFSIZE \
+    -pix_fmt yuv420p \
+    -g 60 \
+    -tag:v hvc1 \
+    -f hls \
+    -hls_time 6 \
+    -hls_list_size 10 \
+    -hls_flags delete_segments+independent_segments \
+    -hls_segment_type mpegts \
+    -hls_segment_filename "$HLS_PATH/segment_%03d.ts" \
+    "$HLS_PATH/$HLS_NAME"
