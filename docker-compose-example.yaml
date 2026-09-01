@@ -7,7 +7,8 @@
 services:
 
   weather:
-    image: ghcr.io/kpirnie/kptv-weather:latest
+    image: ghcr.io/kpirnie/kptv-weather:beta
+    #image: ghcr.io/kpirnie/kptv-weather:latest
     container_name: kptv-weather
     restart: unless-stopped
 

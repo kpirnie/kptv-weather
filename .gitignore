@@ -5,3 +5,5 @@ venv/
 .env
 *.log
 .DS_Store
+compose.yml
+docker-compose.yml
