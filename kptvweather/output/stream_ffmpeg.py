@@ -166,9 +166,9 @@ class FFMPEGStreamer:
         # nvidia
         if enc == "h264_nvenc":
             preset_map = {
-                "placebo": "p1", "veryslow": "p2", "slower": "p3", "slow": "p4",
-                "medium": "p5", "fast": "p6", "faster": "p6",
-                "veryfast": "p7", "ultrafast": "p7",
+                "ultrafast": "p1", "veryfast": "p2", "faster": "p3",
+                "fast": "p4", "medium": "p5", "slow": "p6", "slower": "p7",
+                "veryslow": "p7", "placebo": "p7",
             }
             args = [
                 "-c:v", "h264_nvenc",
