@@ -39,6 +39,10 @@ READ_SIZE = 188 * 64
 # hardware encoders we will try before falling back to software, in order
 HW_ORDER = ("h264_nvenc", "h264_qsv", "h264_vaapi")
 
+# moves the pixel format conversion off swscale and onto the card, for the
+# nvenc path only. bgr0 is a byte shuffle rather than a colorspace change,
+# which is all the cpu has left to do once this is in
+CUDA_CHAIN = "format=bgr0,hwupload_cuda,scale_cuda=format=nv12"
 
 class FFMPEGStreamer:
     """
@@ -182,8 +186,16 @@ class FFMPEGStreamer:
                 "-rc", "cbr",
                 "-zerolatency", "1",
                 "-delay", "0",
-                "-pix_fmt", "yuv420p",
             ]
+
+            # swscale turning every rgba frame into yuv costs more cpu than
+            # the whole renderer does, so hand that to the card when the
+            # build has the cuda filters to do it
+            if self._cuda_filters_functional(CUDA_CHAIN):
+                logger.info("converting on the gpu: %s", CUDA_CHAIN)
+                args += ["-vf", CUDA_CHAIN]
+            else:
+                args += ["-pix_fmt", "yuv420p"]
 
         # intel quicksync
         elif enc == "h264_qsv":
@@ -299,6 +311,43 @@ class FFMPEGStreamer:
         if enc == "h264_qsv" and device:
             cmd += ["-qsv_device", device]
         cmd += ["-f", "null", "-"]
+
+        # run it and see whether it came back clean
+        try:
+            result = subprocess.run(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    @lru_cache(maxsize=None)
+    def _cuda_filters_functional(self, chain: str) -> bool:
+        """
+        Prove a cuda filter chain works before the stream depends on it
+
+        A build can carry the encoder without carrying the filters, and a
+        chain ffmpeg rejects takes the whole encode down rather than
+        degrading, so it gets the same one frame proof the encoders get.
+
+        @param chain: str The filter chain to test
+        @return bool: True when the test encode succeeded
+        """
+
+        # no binary, nothing to test
+        if not self._ffmpeg_exists():
+            return False
+
+        # one frame through the real chain, into the real encoder
+        cmd = [
+            self.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
+            "-frames:v", "1",
+            "-vf", chain,
+            "-c:v", "h264_nvenc",
+            "-f", "null", "-",
+        ]
 
         # run it and see whether it came back clean
         try:
