@@ -62,6 +62,11 @@ class Scheduler:
         @return None
         """
 
+        # these persist across iterations: a layer that repaints between two
+        # frame deadlines must still be composited at the next one
+        dirty = False
+        static_dirty = False
+
         # go until somebody tells us not to
         while True:
 
@@ -78,8 +83,6 @@ class Scheduler:
                 now = time.time()
 
             # tick every layer that is due, noting whether any of them moved
-            dirty = False
-            static_dirty = False
             while self.heap and self.heap[0][0] <= now:
                 _, index = heapq.heappop(self.heap)
                 layer = self.layers[index]
@@ -112,6 +115,8 @@ class Scheduler:
                 if dirty:
                     compositor.compose(self.layers, static_dirty)
                     frame = compositor.present()
+                    dirty = False
+                    static_dirty = False
                 else:
                     frame = compositor.front
                 on_present(frame)
