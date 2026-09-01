@@ -91,17 +91,19 @@ class TSBroker:
     not, which is what keeps this behaving like a real live channel.
     """
 
-    def __init__(self, max_queue: int = 512):
+    def __init__(self, max_queue: int = 512, max_clients: int = 0):
         """
         Build the broker
 
         @param max_queue: int Per-client queue depth before a client is dropped
+        @param max_clients: int Hard cap on attached clients, zero for no cap
         """
 
         # everything below is touched from both the reader and the http threads
         self._lock = threading.Lock()
         self._subscribers: set = set()
         self._max_queue = max(8, int(max_queue))
+        self._max_clients = max(0, int(max_clients))
 
         # leftover bytes from a feed that did not land on a packet boundary
         self._residual = bytearray()
@@ -122,17 +124,24 @@ class TSBroker:
 
     # ------------------------- clients -------------------------
 
-    def subscribe(self) -> tuple:
+    def subscribe(self) -> Optional[tuple]:
         """
         Register a new client and hand back its catch-up bytes
 
-        @return tuple: The subscriber and the packets it should send first
+        @return tuple|None: The subscriber and the packets it should send
+                            first, or None when the cap is already reached
         """
 
         # build it and take the current join point in the same lock so no
         # chunk can slip past between the snapshot and the registration
         sub = Subscriber(self._max_queue)
         with self._lock:
+
+            # the cap is checked in here so two arrivals cannot both pass it
+            if self._max_clients and len(self._subscribers) >= self._max_clients:
+                logger.info("refused a client, already at the %s client cap",
+                            self._max_clients)
+                return None
             tables = bytearray()
             if self._pat:
                 tables.extend(self._pat)

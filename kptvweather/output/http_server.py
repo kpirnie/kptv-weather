@@ -127,7 +127,13 @@ class _StreamHandler(BaseHTTPRequestHandler):
         """
 
         # register first so nothing is missed between headers and the loop
-        sub, preroll = self._broker.subscribe()
+        joined = self._broker.subscribe()
+
+        # the cap is full, so turn this one away rather than degrade the rest
+        if joined is None:
+            self.send_error(503, "Stream at capacity")
+            return
+        sub, preroll = joined
 
         # a live stream has no length, so this runs until the socket dies
         try:

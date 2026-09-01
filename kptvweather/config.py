@@ -71,6 +71,7 @@ class Config:
     base_url: str
     channel_name: str
     channel_logo: str
+    max_clients: int
 
     # data refresh
     units: str
@@ -322,6 +323,7 @@ def from_env() -> Config:
         base_url=_env("BASE_URL").rstrip("/"),
         channel_name=_env("CHANNEL_NAME", "Weather"),
         channel_logo=_env("CHANNEL_LOGO"),
+        max_clients=_env_int("MAX_CLIENTS", 2, 1, 1000),
         units=_env_choice("UNITS", "us", VALID_UNITS),
         data_interval_sec=_env_int("DATA_INTERVAL_SEC", 600, 120, 3600),
         regional_interval_sec=_env_int("REGIONAL_INTERVAL_SEC", 5400, 600, 86400),

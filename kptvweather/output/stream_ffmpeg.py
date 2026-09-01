@@ -25,6 +25,7 @@ import queue
 import shutil
 import subprocess
 import threading
+import time
 from ctypes.util import find_library
 from functools import lru_cache
 from pathlib import Path
@@ -111,6 +112,10 @@ class FFMPEGStreamer:
         self._queue: queue.Queue = queue.Queue(maxsize=max(1, int(max_queue)))
         self._writer_thread: Optional[threading.Thread] = None
         self._reader_thread: Optional[threading.Thread] = None
+
+        # frames the encoder could not keep up with, and when we last said so
+        self._dropped = 0
+        self._drop_logged = 0.0
 
     # ------------------------- encoder selection -------------------------
 
@@ -592,7 +597,28 @@ class FFMPEGStreamer:
             self._queue.put_nowait(payload)
             return True
         except queue.Full:
+            self._note_drop()
             return False
+
+    def _note_drop(self) -> None:
+        """
+        Count a dropped frame and say so at most once a minute
+
+        A drop is a missing frame in a stream stamped at a constant rate, so
+        it shows up as a hitch on the player rather than anything ffmpeg
+        complains about.
+
+        @return None
+        """
+
+        # count it, then rate limit what we actually log
+        self._dropped += 1
+        now = time.time()
+        if now - self._drop_logged < 60.0:
+            return
+        self._drop_logged = now
+        logger.warning("encoder behind, dropped %s frames so far",
+                       self._dropped)
 
     def _restart(self) -> None:
         """

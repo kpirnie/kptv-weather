@@ -704,7 +704,7 @@ def main() -> int:
 
     # the fanout, then the encoder that feeds it, then the service that
     # hands it out - in that order, so nothing is ever serving a dead broker
-    broker = TSBroker()
+    broker = TSBroker(max_clients=cfg.max_clients)
     streamer = FFMPEGStreamer(
         ffmpeg_path=cfg.ffmpeg_path, width=width, height=height,
         fps=cfg.output_fps, on_output=broker.feed,
