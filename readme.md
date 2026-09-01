@@ -1,7 +1,7 @@
 # kptv-weather
 
-[![Build Main](https://img.shields.io/github/actions/workflow/status/kpirnie/kptv-weather/build.yml?branch=main&label=Main&logoColor=white&logo=github&labelColor=000&style=for-the-badge)](https://github.com/kpirnie/kptv-weather/actions?query=workflow%3A%22build+image%22+branch%3Amain)
-[![Build Develop](https://img.shields.io/github/actions/workflow/status/kpirnie/kptv-weather/build.yml?branch=develop&logoColor=white&label=Develop&logo=github&labelColor=000&style=for-the-badge)](https://github.com/kpirnie/kptv-weather/actions?query=workflow%3A%22build+image%22+branch%3Adevelop)
+[![Build](https://img.shields.io/github/actions/workflow/status/kpirnie/kptv-weather/docker.yml?branch=main&label=Main&logoColor=white&logo=github&labelColor=000&style=for-the-badge)](https://github.com/kpirnie/kptv-weather/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/tag/kpirnie/kptv-weather?label=Release&logoColor=white&logo=github&labelColor=000&style=for-the-badge)](https://github.com/kpirnie/kptv-weather/tags)
 [![GitHub Issues](https://img.shields.io/github/issues/kpirnie/kptv-weather?style=for-the-badge&logo=github&color=006400&logoColor=white&labelColor=000)](https://github.com/kpirnie/kptv-weather/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/kpirnie/kptv-weather?style=for-the-badge&labelColor=000)](https://github.com/kpirnie/kptv-weather/commits/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white&labelColor=000)](LICENSE)
