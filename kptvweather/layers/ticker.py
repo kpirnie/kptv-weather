@@ -58,6 +58,12 @@ class TickerLayer(Layer):
         self.get_accent = get_accent
         self.px_per_sec = max(1, int(px_per_sec))
 
+        # a whole number of pixels per frame, since the crop below can only
+        # land on one - a fractional step alternates between two widths and
+        # reads as judder
+        self._step = max(1, int(round(self.px_per_sec * self.scale
+                                      * self.min_interval)))
+
         # the rendered text strip, its cache key, and where we are in it
         self._strip: Image.Image = None
         self._strip_key = None
@@ -126,7 +132,7 @@ class TickerLayer(Layer):
 
         # advance by exactly one frame's worth, so every presented frame
         # moves the same number of pixels
-        self._offset += self.px_per_sec * self.scale * self.min_interval
+        self._offset += self._step
         if self._span > 0:
             self._offset %= self._span
 
