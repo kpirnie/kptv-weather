@@ -4,28 +4,92 @@ services:
     container_name: kptv_weather
     restart: unless-stopped
     ports:
-      - WHATEVER_PORT_YOU_WANT_TO_USE:8080
+      - 8000:8000
     dns:
       - 1.1.1.1
       - 1.0.0.1
       - 8.8.8.8
       - 8.8.4.4
+    devices:
+      # NVIDIA
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+      # Intel / AMD
+      - /dev/dri:/dev/dri
+
     volumes:
+      # REQUIRED: a static ffmpeg build
       - /usr/local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
       - /usr/local/bin/ffprobe:/usr/local/bin/ffprobe:ro
-      # necessary for hardware support
-      - /usr/lib/x86_64-linux-gnu/dri:/usr/lib/x86_64-linux-gnu/dri:ro
-    devices:
-      - /dev/dri:/dev/dri
+      # NVIDIA userspace driver, mounted at the soname the loader looks for.
+      # The version on the left is this host's; check with
+      # `ls -l /usr/lib/x86_64-linux-gnu/libcuda.so.1`
+      - /usr/lib/x86_64-linux-gnu/libcuda.so.595.84:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvcuvid.so.595.84:/usr/lib/x86_64-linux-gnu/libnvcuvid.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.595.84:/usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1:ro
+
     # necessary for hardware support
     group_add:
       - video
       - render
 
+    environment:
+      # --- location: a ZIP, or a lat/lon pair, or a place name -------------
+      KPTVW_ZIP: "01030"
+      # KPTVW_LAT: "42.072"
+      # KPTVW_LON: "-72.675"
+      KPTVW_LOCATION_NAME: "Feeding Hills"
+      KPTVW_TZ: "America/New_York"
+
+      # --- channel identity ------------------------------------------------
+      KPTVW_CHANNEL_NAME: "Weather"
+      KPTVW_CHANNEL_LOGO: ""
+
+      # --- encoder ---------------------------------------------------------
+      KPTVW_FFMPEG_PATH: "/usr/local/bin/ffmpeg"
+      KPTVW_ENCODER: "auto"
+      KPTVW_ENCODER_PRESET: "veryfast"
+      KPTVW_RESOLUTION: "1920x1080"
+      KPTVW_FPS: "30"
+      KPTVW_VIDEO_KBPS: "3500"
+      KPTVW_AUDIO_KBPS: "128"
+
+      # --- http service ----------------------------------------------------
+      KPTVW_HTTP_HOST: "0.0.0.0"
+      KPTVW_HTTP_PORT: "8000"
+      KPTVW_STREAM_PATH: "/stream.ts"
+      KPTVW_PLAYLIST_PATH: "/playlist.m3u8"
+      # what the playlist advertises; set this when behind a proxy
+      KPTVW_BASE_URL: "http://192.168.2.100:8000"
+
+      # --- data ------------------------------------------------------------
+      KPTVW_UNITS: "us"
+      KPTVW_DATA_INTERVAL_SEC: "600"
+      KPTVW_REGIONAL_INTERVAL_SEC: "5400"
+      KPTVW_REGIONAL_CITIES: "6"
+      KPTVW_RADAR_SOURCE: "auto"
+
+      # --- presentation ----------------------------------------------------
+      KPTVW_PAGE_SECONDS: "14"
+      KPTVW_TICKER_SPEED: "120"
+      KPTVW_MUSIC_DIR: "/music"
+      KPTVW_MUSIC_VOLUME: "50"
+
+      # --- news ticker: ignored entirely while any weather alert is active --
+      KPTVW_RSS_URLS: "https://www.wwlp.com/feed/"
+      KPTVW_RSS_REFRESH_SEC: "300"
+      KPTVW_RSS_MAX_ITEMS: "20"
+
+      # DEBUG: "true"
+
+
     # Health check
-    healthcheck:
-      test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    #healthcheck:
+    #  test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
+    #  interval: 30s
+    #  timeout: 10s
+    #  retries: 3
+   #   start_period: 30s

@@ -316,7 +316,7 @@ def from_env() -> Config:
         video_encoder=_env("ENCODER", "auto").lower(),
         encoder_preset=_env("ENCODER_PRESET", "veryfast").lower(),
         http_host=_env("HTTP_HOST", "0.0.0.0"),
-        http_port=_env_int("HTTP_PORT", 5960, 1, 65535),
+        http_port=_env_int("HTTP_PORT", 8000, 1, 65535),
         stream_path=_normalize_path(_env("STREAM_PATH"), "/stream.ts"),
         playlist_path=_normalize_path(_env("PLAYLIST_PATH"), "/playlist.m3u8"),
         base_url=_env("BASE_URL").rstrip("/"),

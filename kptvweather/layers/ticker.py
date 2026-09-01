@@ -87,8 +87,11 @@ class TickerLayer(Layer):
         probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         text_width = draw.measure(probe, text, face)[0]
 
-        # lay it out twice with a gap, so the scroll can loop seamlessly
-        gap = max(self.s(80, 20), int(text_width * GAP_FRACTION))
+        # the gap has to be at least a full window wide, or the crop below
+        # runs off the end of the strip and the loop plays a blank stretch
+        window_w = max(1, self.surface.size[0] - self._label_width()
+                       - self.s(16, 4))
+        gap = max(window_w, self.s(80, 20), int(text_width * GAP_FRACTION))
         span = text_width + gap
         strip = Image.new("RGBA", (max(1, span * 2), height), (0, 0, 0, 0))
         pen = ImageDraw.Draw(strip)

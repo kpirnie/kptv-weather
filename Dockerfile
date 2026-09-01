@@ -1,47 +1,72 @@
-# syntax=docker/dockerfile:1
-
 # kptv-weather
 #
 # ffmpeg is deliberately NOT installed here. A static ffmpeg build must be
 # bind mounted in at runtime and its path passed as KPTVW_FFMPEG_PATH.
 
-FROM python:3.14-slim
+FROM docker.io/library/python:3.14-slim AS builder
 
-# the usual container hygiene
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# everything installs into a venv so the final stage copies one directory
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+
+FROM docker.io/library/python:3.14-slim
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PATH="/opt/venv/bin:$PATH"
 
-# certificates for the outbound https calls, and a timezone database so the
-# on-screen clock can be pinned to the station's own zone
+# certificates for the outbound https calls, a timezone database so the
+# on-screen clock can be pinned to the station's own zone, and the VA-API
+# stack. The Mesa drivers cover Intel and AMD in-image, so those hosts only
+# have to pass /dev/dri through. NVIDIA ships no redistributable userspace,
+# so those hosts bind mount libcuda and libnvidia-encode themselves.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libva-drm2 \
+    libva2 \
+    mesa-va-drivers \
+    tzdata \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
+
+# just the dependencies, without pip or the toolchain behind them
+COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 
-# dependencies first so the layer caches
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# then the application
+# the application
 COPY kptvweather /app/kptvweather
 COPY assets /app/assets
 
 # the music mount point, empty unless something is bind mounted over it
 RUN mkdir -p /music
 
-# run as a normal user
-RUN useradd --system --uid 10001 --create-home --home-dir /home/kptvw kptvw \
+# the host's video and render GIDs, so the passed-through /dev/dri nodes are
+# accessible. These differ between distributions - render is 992 on some and
+# 107 on others - so prefer group_add with a numeric GID at runtime over
+# relying on these matching.
+ARG VIDEO_GID=44
+ARG RENDER_GID=992
+
+# run as a normal user, in the groups that own the render nodes
+RUN (getent group ${VIDEO_GID} || groupadd --system --gid ${VIDEO_GID} video) \
+    && (getent group ${RENDER_GID} || groupadd --system --gid ${RENDER_GID} render) \
+    && groupadd --system --gid 10001 kptvw \
+    && useradd --system --uid 10001 --gid 10001 --create-home \
+    --home-dir /home/kptvw kptvw \
+    && usermod -a -G $(getent group ${VIDEO_GID} | cut -d: -f1),$(getent group ${RENDER_GID} | cut -d: -f1) kptvw \
     && chown -R kptvw:kptvw /app /music
 USER kptvw
 
-EXPOSE 5960
-
-# a container with a dead encoder is worse than one that restarts
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request,os,sys; \
-port=os.environ.get('KPTVW_HTTP_PORT','5960'); \
-sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=4).status == 200 else 1)"
+EXPOSE 8000
 
 CMD ["python", "-m", "kptvweather.main"]

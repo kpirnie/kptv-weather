@@ -208,9 +208,10 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
         ]
         bounds = compute_bounds(coords, lat, lon, pad_degrees=0.35, min_span=2.0)
 
-        # and stitch a backdrop at roughly the size it will be drawn
-        width = max(200, render_w - int(round(192 * scale)))
-        height = max(200, render_h - int(round(472 * scale)))
+        # these have to match the box the map layer actually draws into, or
+        # the layer's cover-crop trims the edges back off again
+        width = max(200, render_w - int(round(160 * scale)))
+        height = max(200, render_h - int(round(438 * scale)))
         view = map_tiles.compose_base_map(bounds[0], bounds[1], bounds[2],
                                           bounds[3], width, height,
                                           cfg.user_agent)
@@ -477,7 +478,7 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
 
         # and the radar
         radar_w = max(200, render_w - int(round(160 * scale)))
-        radar_h = max(200, render_h - int(round(432 * scale)))
+        radar_h = max(200, render_h - int(round(452 * scale)))
         refresh_radar(now, radar_w, radar_h)
         data["radar_new_frames"] = radar_getter
         data["radar_source"] = radar_state.get("source") or ""
@@ -517,8 +518,11 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
 
     # the persistent header elements
     columns = layout.header_columns(width, s)
-    band_top = s(layout.LABEL_Y) - s(6)
-    band_h = s(layout.HEADER_H) - band_top - s(8)
+
+    # the temperature and clock blocks are bottom-heavy, so they start above
+    # the title rather than level with it - lower this to raise them further
+    band_top = s(46)
+    band_h = s(layout.HEADER_H) - band_top - s(26)
 
     # current temperature in column three
     temp_x, temp_w = columns[2]
@@ -760,6 +764,9 @@ def main() -> int:
             streamer.send(image.tobytes())
         except Exception as exc:
             logger.warning("frame write failed: %r", exc)
+        finally:
+            # a write failure must never take the render loop down with it
+            pass
 
     # and away it goes
     logger.info("channel '%s' is live", cfg.channel_name)

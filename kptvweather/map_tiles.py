@@ -206,6 +206,32 @@ def compose_base_map(south: float, west: float, north: float, east: float,
         y_min = int(math.floor(_lat_to_y(north, zoom)))
         y_max = int(math.floor(_lat_to_y(south, zoom)))
 
+    # the exact pixel window the requested box occupies at this zoom
+    px_left = _lon_to_x(west, zoom) * TILE_SIZE
+    px_right = _lon_to_x(east, zoom) * TILE_SIZE
+    px_top = _lat_to_y(north, zoom) * TILE_SIZE
+    px_bottom = _lat_to_y(south, zoom) * TILE_SIZE
+
+    # widen whichever axis is short so the window matches the output aspect
+    # exactly - without this the resize below would stretch the projection
+    target = max(1, width) / max(1, height)
+    window_w = max(1.0, px_right - px_left)
+    window_h = max(1.0, px_bottom - px_top)
+    if window_w / window_h < target:
+        wanted = window_h * target
+        center = (px_left + px_right) / 2.0
+        px_left, px_right = center - wanted / 2.0, center + wanted / 2.0
+    else:
+        wanted = window_w / target
+        center = (px_top + px_bottom) / 2.0
+        px_top, px_bottom = center - wanted / 2.0, center + wanted / 2.0
+
+    # the tile grid has to cover the widened window, not the original box
+    x_min = int(math.floor(px_left / TILE_SIZE))
+    x_max = int(math.floor((px_right - 1) / TILE_SIZE))
+    y_min = int(math.floor(px_top / TILE_SIZE))
+    y_max = int(math.floor((px_bottom - 1) / TILE_SIZE))
+
     # stitch whatever comes back
     columns = x_max - x_min + 1
     rows = y_max - y_min + 1
@@ -224,17 +250,24 @@ def compose_base_map(south: float, west: float, north: float, east: float,
     if loaded == 0:
         return None
 
-    # the real bounds are the edges of the tiles we actually stitched
+    # crop the window back out of the grid, then scale it down uniformly
+    origin_x = x_min * TILE_SIZE
+    origin_y = y_min * TILE_SIZE
+    cropped = canvas.crop((
+        int(round(px_left - origin_x)), int(round(px_top - origin_y)),
+        int(round(px_right - origin_x)), int(round(px_bottom - origin_y)),
+    ))
+
+    # the bounds are now the window's, which is what any overlay has to use
     bounds = (
-        _y_to_lat(y_max + 1, zoom),
-        _x_to_lon(x_min, zoom),
-        _y_to_lat(y_min, zoom),
-        _x_to_lon(x_max + 1, zoom),
+        _y_to_lat(px_bottom / TILE_SIZE, zoom),
+        _x_to_lon(px_left / TILE_SIZE, zoom),
+        _y_to_lat(px_top / TILE_SIZE, zoom),
+        _x_to_lon(px_right / TILE_SIZE, zoom),
     )
 
-    # scale the stitched grid down to what was asked for
-    return MapView(image=canvas.resize((max(1, width), max(1, height)),
-                                       Image.LANCZOS),
+    return MapView(image=cropped.resize((max(1, width), max(1, height)),
+                                        Image.LANCZOS),
                    bounds=bounds)
 
 

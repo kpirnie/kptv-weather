@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "5960:5960"
+      - "8000:8000"
 
     devices:
       # hardware encoding, drop this line to force software
@@ -51,11 +51,11 @@ services:
 
       # --- http service ----------------------------------------------------
       KPTVW_HTTP_HOST: "0.0.0.0"
-      KPTVW_HTTP_PORT: "5960"
+      KPTVW_HTTP_PORT: "8000"
       KPTVW_STREAM_PATH: "/stream.ts"
       KPTVW_PLAYLIST_PATH: "/playlist.m3u8"
       # what the playlist advertises; set this when behind a proxy
-      KPTVW_BASE_URL: "http://10.89.1.1:5960"
+      KPTVW_BASE_URL: "http://10.89.1.1:8000"
 
       # --- data ------------------------------------------------------------
       KPTVW_UNITS: "us"

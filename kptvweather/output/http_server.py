@@ -80,8 +80,9 @@ class _StreamHandler(BaseHTTPRequestHandler):
             self._serve_stream()
             return
 
-        # the playlist pointing at it
-        if path == self._cfg.playlist_path.rstrip("/"):
+        # the playlist pointing at it, under either extension
+        playlist = self._cfg.playlist_path.rstrip("/")
+        if path in (playlist, playlist.replace(".m3u8", ".m3u")):
             self._serve_playlist()
             return
 
@@ -179,7 +180,7 @@ class _StreamHandler(BaseHTTPRequestHandler):
 
         # ship it
         self.send_response(200)
-        self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+        self.send_header("Content-Type", "audio/x-mpegurl")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")

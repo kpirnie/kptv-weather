@@ -54,7 +54,7 @@ class FFMPEGStreamer:
                  video_encoder: str = "auto", encoder_preset: str = "veryfast",
                  threads: int = 2, gop_seconds: float = 1.0,
                  pat_period: float = 0.5, pcr_period_ms: int = 40,
-                 max_queue: int = 2):
+                 max_queue: int = 8):
         """
         Build the streamer
 
@@ -284,7 +284,10 @@ class FFMPEGStreamer:
         cmd = [self.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y"]
         if enc == "h264_vaapi" and device:
             cmd += ["-vaapi_device", device]
-        cmd += ["-f", "lavfi", "-i", "color=black:s=64x64:d=0.1", "-frames:v", "1"]
+        # NVENC rejects anything below 128x128, so the test frame has to clear
+        # that or a perfectly good encoder looks broken
+        cmd += ["-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
+                "-frames:v", "1"]
         if enc == "h264_vaapi":
             cmd += ["-vf", "format=nv12,hwupload"]
         cmd += ["-c:v", enc]
@@ -306,25 +309,37 @@ class FFMPEGStreamer:
     @lru_cache(maxsize=None)
     def _nvenc_present() -> bool:
         """
-        Whether the nvidia userspace driver looks to be available
+        Whether an NVIDIA GPU looks to be reachable from inside the container
 
-        @return bool: True when a cuda library or nvidia-smi was found
+        The device nodes and the userspace driver arrive separately: the nodes
+        come from the container runtime, the libraries have to be bind mounted
+        because NVIDIA ships nothing redistributable. Either one on its own is
+        enough to be worth probing, since the probe is what actually decides.
+
+        @return bool: True when NVENC is worth attempting
         """
 
-        # the loader knows best
-        if find_library("cuda"):
+        # the control node is the reliable signal that a GPU was passed in
+        for node in ("/dev/nvidiactl", "/dev/nvidia0"):
+            if os.path.exists(node):
+                return True
+
+        # the loader knows best about the libraries
+        if find_library("cuda") or find_library("nvidia-encode"):
             return True
 
-        # otherwise check the usual places the runtime mounts it
-        for path in (
-            "/usr/lib64/nvidia/libcuda.so.1",
-            "/usr/lib/x86_64-linux-gnu/libcuda.so.1",
-            "/usr/lib/aarch64-linux-gnu/libcuda.so.1",
-            "/usr/lib/wsl/lib/libcuda.so",
-            "/usr/local/cuda/lib64/libcuda.so.1",
+        # otherwise check the usual places a mount or the toolkit puts them
+        for directory in (
+            "/usr/lib/x86_64-linux-gnu",
+            "/usr/lib/aarch64-linux-gnu",
+            "/usr/lib64",
+            "/usr/lib64/nvidia",
+            "/usr/local/cuda/lib64",
+            "/usr/lib/wsl/lib",
         ):
-            if os.path.exists(path):
-                return True
+            for name in ("libcuda.so.1", "libnvidia-encode.so.1"):
+                if os.path.exists(f"{directory}/{name}"):
+                    return True
 
         # last resort
         return shutil.which("nvidia-smi") is not None
@@ -521,14 +536,18 @@ class FFMPEGStreamer:
             if payload is None:
                 break
 
+            # grab the handle under the lock, then release it before writing:
+            # a full frame is megabytes and the write blocks until ffmpeg
+            # drains it, which would otherwise stall every other caller
+            with self._proc_lock:
+                proc = self.proc
+            if proc is None or proc.poll() is not None or proc.stdin is None:
+                self._proc_dead = True
+                continue
+
             # write it out whole, marking the process dead on any pipe fault
             try:
-                with self._proc_lock:
-                    proc = self.proc
-                    if proc is None or proc.poll() is not None or proc.stdin is None:
-                        self._proc_dead = True
-                        continue
-                    self._write_all(proc, payload)
+                self._write_all(proc, payload)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 self._proc_dead = True
 

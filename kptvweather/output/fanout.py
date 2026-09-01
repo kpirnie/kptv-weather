@@ -106,8 +106,16 @@ class TSBroker:
         # leftover bytes from a feed that did not land on a packet boundary
         self._residual = bytearray()
 
-        # every packet since the last PAT, which is where new clients start
-        self._join = bytearray()
+        # the program tables, kept as whole packets so a new client can be
+        # handed them ahead of anything else
+        self._pat: Optional[bytes] = None
+        self._pmt: Optional[bytes] = None
+        self._pmt_pid: Optional[int] = None
+        self._video_pid: Optional[int] = None
+
+        # every packet since the last keyframe, which is where new clients
+        # start decoding
+        self._join = bytearray()    
 
         # rough health signal for the status endpoint
         self._bytes_out = 0
@@ -125,7 +133,12 @@ class TSBroker:
         # chunk can slip past between the snapshot and the registration
         sub = Subscriber(self._max_queue)
         with self._lock:
-            preroll = bytes(self._join)
+            tables = bytearray()
+            if self._pat:
+                tables.extend(self._pat)
+            if self._pmt:
+                tables.extend(self._pmt)
+            preroll = bytes(tables + self._join)
             self._subscribers.add(sub)
 
         # log the arrival so a misbehaving client is easy to spot
@@ -236,9 +249,9 @@ class TSBroker:
         """
         Keep the buffer a newly connected client needs to start decoding
 
-        Every packet carrying PID 0 is a PAT; the encoder is told to resend
-        headers alongside them, so restarting the buffer there means a new
-        client always gets program tables before any payload.
+        The program tables are held separately and the payload buffer starts
+        over at every random access point, so a client is always handed a
+        PAT, a PMT, and then a keyframe carrying its own parameter sets.
 
         @param chunk: bytes A whole number of transport stream packets
         @return None
@@ -252,16 +265,135 @@ class TSBroker:
                 # the pid is the low five bits of byte one plus all of byte two
                 pid = ((packet[1] & 0x1F) << 8) | packet[2]
 
-                # a PAT means we can start a fresh join point here
+                # the tables are held aside rather than buffered
                 if pid == 0:
-                    self._join = bytearray()
+                    self._pat = packet
+                    self._pmt_pid = self._parse_pat(packet)
+                    continue
+                if self._pmt_pid is not None and pid == self._pmt_pid:
+                    self._pmt = packet
+                    self._video_pid = self._parse_pmt(packet)
+                    continue
 
-                # everything gets appended to whatever the current point is
+                # a random access point on the video is a fresh start
+                if self._is_random_access(packet):
+                    if self._video_pid is None or pid == self._video_pid:
+                        self._join = bytearray()
+
+                # everything else accumulates behind it
                 self._join.extend(packet)
 
-            # never let it run away if the tables somehow stop arriving
+            # never let it run away if the keyframes somehow stop arriving
             if len(self._join) > MAX_JOIN_PACKETS * TS_PACKET_SIZE:
                 del self._join[:-MAX_JOIN_PACKETS * TS_PACKET_SIZE]
+
+    @staticmethod
+    def _payload_offset(packet: bytes) -> Optional[int]:
+        """
+        Where a packet's payload begins, past any adaptation field
+
+        @param packet: bytes One transport stream packet
+        @return int|None: The payload offset, or None when there is no payload
+        """
+
+        # the adaptation field control sits in the high nibble of byte three
+        control = (packet[3] >> 4) & 0x03
+
+        # no payload at all
+        if control in (0, 2):
+            return None
+
+        # payload only
+        if control == 1:
+            return 4
+
+        # adaptation field then payload, so skip its declared length
+        return 5 + packet[4]
+
+    @staticmethod
+    def _is_random_access(packet: bytes) -> bool:
+        """
+        Whether a packet carries the random access indicator
+
+        @param packet: bytes One transport stream packet
+        @return bool: True when this packet starts a random access point
+        """
+
+        # the flag only exists when there is an adaptation field with content
+        control = (packet[3] >> 4) & 0x03
+        if control not in (2, 3) or packet[4] == 0:
+            return False
+        return bool(packet[5] & 0x40)
+
+    def _section_start(self, packet: bytes) -> Optional[int]:
+        """
+        Where a table section begins inside a packet
+
+        @param packet: bytes One transport stream packet
+        @return int|None: The section offset, or None when there is none here
+        """
+
+        # sections only ever start on a unit start packet
+        if not packet[1] & 0x40:
+            return None
+
+        # past the adaptation field, then past the pointer field
+        offset = self._payload_offset(packet)
+        if offset is None or offset >= len(packet):
+            return None
+        return offset + 1 + packet[offset]
+
+    def _parse_pat(self, packet: bytes) -> Optional[int]:
+        """
+        Read the first program's map PID out of a PAT
+
+        @param packet: bytes A packet carrying PID zero
+        @return int|None: The PMT PID, or None when it could not be read
+        """
+
+        # find the section and check it really is a PAT
+        start = self._section_start(packet)
+        if start is None or start + 12 > len(packet) or packet[start] != 0x00:
+            return None
+
+        # the program loop begins eight bytes into the section
+        cursor = start + 8
+        while cursor + 4 <= len(packet):
+            number = (packet[cursor] << 8) | packet[cursor + 1]
+            pid = ((packet[cursor + 2] & 0x1F) << 8) | packet[cursor + 3]
+
+            # program zero is the network information table, not a program
+            if number != 0:
+                return pid
+            cursor += 4
+        return None
+
+    def _parse_pmt(self, packet: bytes) -> Optional[int]:
+        """
+        Read the H.264 elementary PID out of a PMT
+
+        @param packet: bytes A packet carrying the PMT PID
+        @return int|None: The video PID, or None when it could not be read
+        """
+
+        # find the section and check it really is a PMT
+        start = self._section_start(packet)
+        if start is None or start + 12 > len(packet) or packet[start] != 0x02:
+            return None
+
+        # skip the descriptors that precede the stream loop
+        info_length = ((packet[start + 10] & 0x0F) << 8) | packet[start + 11]
+        cursor = start + 12 + info_length
+
+        # then walk the streams looking for the video one
+        while cursor + 5 <= len(packet):
+            stream_type = packet[cursor]
+            pid = ((packet[cursor + 1] & 0x1F) << 8) | packet[cursor + 2]
+            es_length = ((packet[cursor + 3] & 0x0F) << 8) | packet[cursor + 4]
+            if stream_type == 0x1B:
+                return pid
+            cursor += 5 + es_length
+        return None
 
     def _broadcast(self, chunk: bytes) -> None:
         """
