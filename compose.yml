@@ -52,7 +52,7 @@ services:
       KPTVW_FFMPEG_PATH: "/usr/local/bin/ffmpeg"
       KPTVW_ENCODER: "auto"
       KPTVW_ENCODER_PRESET: "veryfast"
-      KPTVW_RESOLUTION: "1920x1080"
+      KPTVW_RESOLUTION: "1280x720"
       KPTVW_FPS: "30"
       KPTVW_VIDEO_KBPS: "3500"
       KPTVW_AUDIO_KBPS: "128"
