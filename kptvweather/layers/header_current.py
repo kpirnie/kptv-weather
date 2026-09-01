@@ -70,21 +70,31 @@ class HeaderCurrentLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the icon on the left
+        # the icon on the left, on the band's centre line
+        center = height // 2
         icon_size = self.s(72, 16)
         art = icons.render(icon, icon_size, 0)
-        self.surface.paste(art, (0, max(0, (height - icon_size) // 2 - self.s(8))),
-                           art)
+        self.surface.paste(art, (0, center - icon_size // 2), art)
 
         # the temperature beside it, coloured by the ramp
         cursor = icon_size + self.s(14)
         available = max(self.s(60), width - cursor)
         color = theme.temp_color(data.get("temp_f"))
         temp_face = draw.fit_face(pen, temp, "black", self.s(58, 16), available)
-        draw.text(pen, (cursor, self.s(2)), temp, temp_face, color)
+        temp_size = getattr(temp_face, "size", self.s(58, 16))
 
-        # and the condition phrase under it
-        if summary:
-            face = draw.fit_face(pen, summary, "medium", self.s(24, 9), available)
-            draw.text(pen, (cursor, self.s(66)), summary, face, theme.TEXT_DIM)
+        # with nothing under it, it takes the centre line on its own
+        if not summary:
+            draw.text(pen, (cursor, center), temp, temp_face, color,
+                      anchor="lm")
+            return True
+
+        # otherwise the pair sits either side of it
+        face = draw.fit_face(pen, summary, "medium", self.s(24, 9), available)
+        summary_size = getattr(face, "size", self.s(24, 9))
+        gap = self.s(8, 2)
+        draw.text(pen, (cursor, center - (gap + summary_size) // 2), temp,
+                  temp_face, color, anchor="lm")
+        draw.text(pen, (cursor, center + (gap + temp_size) // 2), summary,
+                  face, theme.TEXT_DIM, anchor="lm")
         return True

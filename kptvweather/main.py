@@ -519,11 +519,11 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
     # the persistent header elements
     columns = layout.header_columns(width, s)
 
-    # the temperature and clock blocks are bottom-heavy, so they start above
-    # the title rather than level with it - lower this to raise them further
-    band_top = s(46)
-    band_h = s(layout.HEADER_H) - band_top - s(26)
-
+    # the temperature and clock blocks fill the band and centre inside it,
+    # the same way the identity and title columns do
+    band_top = 0
+    band_h = max(1, s(layout.HEADER_H) - max(2, s(4)))
+    
     # current temperature in column three
     temp_x, temp_w = columns[2]
     header_current = HeaderCurrentLayer(

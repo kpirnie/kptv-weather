@@ -68,13 +68,19 @@ class ClockLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the time
+        # the time and the date, centred as a pair on the band's centre line
+        center = height // 2
         time_face = draw.fit_face(pen, clock, "black", self.s(46, 14), width)
-        draw.text(pen, (width, self.s(4)), clock, time_face, theme.TEXT,
-                  anchor="ra")
+        time_size = getattr(time_face, "size", self.s(46, 14))
+        date_face = draw.fit_face(pen, date, "medium", self.s(26, 10), width)
+        date_size = getattr(date_face, "size", self.s(26, 10))
+        gap = self.s(8, 2)
+
+        # the time
+        draw.text(pen, (width, center - (gap + date_size) // 2), clock,
+                  time_face, theme.TEXT, anchor="rm")
 
         # and the date under it
-        date_face = draw.fit_face(pen, date, "medium", self.s(26, 10), width)
-        draw.text(pen, (width, self.s(58)), date, date_face, theme.TEXT_DIM,
-                  anchor="ra")
+        draw.text(pen, (width, center + (gap + time_size) // 2), date,
+                  date_face, theme.TEXT_DIM, anchor="rm")
         return True

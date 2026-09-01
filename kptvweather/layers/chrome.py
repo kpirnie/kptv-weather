@@ -136,31 +136,46 @@ class ChromeLayer(Layer):
         @return None
         """
 
-        # the logo, or an accent bar standing in for it
+        # every block in the band straddles this line
         left, col_width = column
-        top = self.s(28)
+        center = (header_h - max(2, self.s(4))) // 2
+
+        # the logo, or an accent bar standing in for it
         cursor = left
         if self._logo is not None:
-            self.surface.paste(self._logo, (left, top), self._logo)
+            self.surface.paste(self._logo,
+                               (left, center - self._logo.height // 2),
+                               self._logo)
             cursor = left + self._logo.width + self.s(20)
         else:
             bar = self.s(8, 2)
-            draw.accent_bar(pen, (left, top, left + bar, top + self.s(72, 8)))
+            bar_h = self.s(72, 8)
+            draw.accent_bar(pen, (left, center - bar_h // 2, left + bar,
+                                  center - bar_h // 2 + bar_h))
             cursor = left + bar + self.s(20)
 
         # the channel identity
         available = max(self.s(80), (left + col_width) - cursor)
-        name_face = draw.fit_face(pen, self.channel_name or "WEATHER", "black",
-                                  self.s(42, 12), available)
-        draw.text(pen, (cursor, top), (self.channel_name or "WEATHER").upper(),
-                  name_face, theme.TEXT)
+        name = (self.channel_name or "WEATHER").upper()
+        name_face = draw.fit_face(pen, name, "black", self.s(42, 12), available)
+        name_size = getattr(name_face, "size", self.s(42, 12))
 
-        # and the location under it
-        if self.location_name:
-            location_face = draw.fit_face(pen, self.location_name, "medium",
-                                          self.s(28, 10), available)
-            draw.text(pen, (cursor, top + self.s(52)), self.location_name,
-                      location_face, theme.TEXT_DIM)
+        # with nothing under it, it takes the centre line on its own
+        if not self.location_name:
+            draw.text(pen, (cursor, center), name, name_face, theme.TEXT,
+                      anchor="lm")
+            return
+
+        # otherwise the pair sits either side of it
+        location_face = draw.fit_face(pen, self.location_name, "medium",
+                                      self.s(28, 10), available)
+        location_size = getattr(location_face, "size", self.s(28, 10))
+        gap = self.s(10, 2)
+        draw.text(pen, (cursor, center - (gap + location_size) // 2), name,
+                  name_face, theme.TEXT, anchor="lm")
+        draw.text(pen, (cursor, center + (gap + name_size) // 2),
+                  self.location_name, location_face, theme.TEXT_DIM,
+                  anchor="lm")
 
     def _draw_title(self, pen: ImageDraw.ImageDraw, column: tuple,
                     header_h: int) -> None:
@@ -173,17 +188,25 @@ class ChromeLayer(Layer):
         @return None
         """
 
-        # a small caption over the title itself
+        # the same centre line the rest of the band uses
         left, col_width = column
-        caption = theme.font("semibold", self.s(20, 9))
-        draw.text(pen, (left, self.s(layout.LABEL_Y) - self.s(38)), "NOW SHOWING",
-                  caption, theme.TEXT_FAINT)
+        center = (header_h - max(2, self.s(4))) // 2
 
-        # the title, shrunk to fit its column
+        # the caption and the title, measured so the pair centres as one
+        caption = theme.font("semibold", self.s(20, 9))
+        caption_size = getattr(caption, "size", self.s(20, 9))
         face = draw.fit_face(pen, self.page_title, "bold", self.s(34, 11),
                              col_width)
-        draw.text(pen, (left, self.s(layout.LABEL_Y) - self.s(6)),
-                  self.page_title, face, theme.TEXT)
+        title_size = getattr(face, "size", self.s(34, 11))
+        gap = self.s(10, 2)
+
+        # a small caption over the title itself
+        draw.text(pen, (left, center - (gap + title_size) // 2), "NOW SHOWING",
+                  caption, theme.TEXT_FAINT, anchor="lm")
+
+        # then the title
+        draw.text(pen, (left, center + (gap + caption_size) // 2),
+                  self.page_title, face, theme.TEXT, anchor="lm")
 
     def _draw_alerts(self, pen: ImageDraw.ImageDraw, alerts: list, width: int,
                      header_h: int) -> None:
