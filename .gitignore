@@ -1,1 +1,7 @@
-compose.yml
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.log
+.DS_Store

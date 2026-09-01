@@ -87,7 +87,7 @@ class Config:
     user_agent: str
 
     # news ticker
-    rss_urls: list[str] = field(default_factory=list)
+    rss_urls: list = field(default_factory=list)
     rss_refresh_sec: int = 300
     rss_max_items: int = 3
 
@@ -165,7 +165,7 @@ def _env_float(name: str, default: float, minimum: float,
     return max(minimum, min(maximum, value))
 
 
-def _env_choice(name: str, default: str, allowed: tuple[str, ...]) -> str:
+def _env_choice(name: str, default: str, allowed: tuple) -> str:
     """
     Read a prefixed environment variable constrained to a fixed set
 
@@ -182,7 +182,7 @@ def _env_choice(name: str, default: str, allowed: tuple[str, ...]) -> str:
     return raw if raw in allowed else default
 
 
-def _parse_resolution(raw: str) -> tuple[int, int]:
+def _parse_resolution(raw: str) -> tuple:
     """
     Split a WIDTHxHEIGHT string into its two dimensions
 
@@ -209,7 +209,7 @@ def _parse_resolution(raw: str) -> tuple[int, int]:
     return width - (width % 2), height - (height % 2)
 
 
-def _parse_rss(raw: str) -> list[str]:
+def _parse_rss(raw: str) -> list:
     """
     Split and validate the configured news ticker feed list
 
@@ -228,7 +228,7 @@ def _parse_rss(raw: str) -> list[str]:
     normalized = raw.replace("\r", "\n").replace(";", ",").replace("\n", ",")
 
     # walk each candidate and keep only the sane ones
-    urls: list[str] = []
+    urls: list = []
     for item in normalized.split(","):
 
         # trim it and skip the empties and the absurdly long
@@ -336,4 +336,3 @@ def from_env() -> Config:
         rss_refresh_sec=_env_int("RSS_REFRESH_SEC", 300, 60, 3600),
         rss_max_items=_env_int("RSS_MAX_ITEMS", 3, 1, 50),
     )
-    

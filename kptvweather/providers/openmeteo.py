@@ -15,7 +15,6 @@ conditions, an hourly series, and a daily series together.
 from __future__ import annotations
 
 import logging
-import math
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -125,17 +124,9 @@ class OpenMeteoClient:
     a blank screen when the network is down.
     """
 
-    def __init__(
-        self,
-        lat: float,
-        lon: float,
-        *,
-        units: str = "us",
-        cache_ttl: int = 600,
-        secondary_ttl: int = 5400,
-        user_agent: str = "kptv-weather/1.0",
-        timeout: int = 20,
-    ):
+    def __init__(self, lat: float, lon: float, *, units: str = "us",
+                 cache_ttl: int = 600, secondary_ttl: int = 5400,
+                 user_agent: str = "kptv-weather/1.0", timeout: int = 20):
         """
         Build the client
 
@@ -159,12 +150,12 @@ class OpenMeteoClient:
 
         # cache state, touched from the refresh thread
         self._lock = threading.RLock()
-        self._cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._cache: Dict[str, tuple] = {}
         self._calls_made = 0
         self._last_error: Optional[str] = None
 
         # a pooled session with retries, since these are all the same host
-        self._session = _build_session(user_agent)
+        self._session = build_session(user_agent)
 
     # -- introspection ----------------------------------------------------
 
@@ -226,7 +217,6 @@ class OpenMeteoClient:
             "timezone": "auto",
             "timeformat": "unixtime",
             "forecast_days": "7",
-            "forecast_hours": "24",
         }
         params.update(UNIT_PARAMS[self.units])
         return params
@@ -274,7 +264,7 @@ class OpenMeteoClient:
         # clear the error state and hand back the reshaped version
         with self._lock:
             self._last_error = None
-        return _reshape(payload)
+        return reshape(payload)
 
     def _cached(self, lat: float, lon: float, ttl: int) -> Dict[str, Any]:
         """
@@ -353,7 +343,7 @@ class OpenMeteoClient:
         return tz if isinstance(tz, str) and tz else None
 
 
-def _build_session(user_agent: str) -> requests.Session:
+def build_session(user_agent: str) -> requests.Session:
     """
     Build a pooled session with sane retry behaviour
 
@@ -416,7 +406,23 @@ def _pick(series: dict, key: str, index: int) -> Optional[float]:
     return _num(values[index])
 
 
-def _describe(code: Any, is_day: bool) -> tuple[str, str]:
+def _code_at(series: dict, index: int) -> Any:
+    """
+    Read a weather code out of a series without tripping over gaps
+
+    @param series: dict The series block from the response
+    @param index: int Which position to read
+    @return mixed: The code, or None
+    """
+
+    # same bounds checking as _pick, but the value stays raw
+    values = series.get("weather_code")
+    if not isinstance(values, list) or index >= len(values):
+        return None
+    return values[index]
+
+
+def describe(code: Any, is_day: bool) -> tuple:
     """
     Turn a WMO weather code into a phrase and an icon key
 
@@ -436,7 +442,7 @@ def _describe(code: Any, is_day: bool) -> tuple[str, str]:
     return phrase, family
 
 
-def _precip_type(code: Any) -> str:
+def precip_type(code: Any) -> str:
     """
     Work out whether precipitation is frozen or liquid from the weather code
 
@@ -457,7 +463,7 @@ def _precip_type(code: Any) -> str:
     return "rain" if numeric >= 51 else "none"
 
 
-def _moon_phase(epoch: Optional[float]) -> Optional[float]:
+def moon_phase(epoch: Optional[float]) -> Optional[float]:
     """
     Approximate the moon phase as a fraction of the synodic month
 
@@ -498,7 +504,7 @@ def _visibility(raw: Optional[float], units: str) -> Optional[float]:
     return raw / 1000.0
 
 
-def _reshape(payload: dict) -> Dict[str, Any]:
+def reshape(payload: dict) -> Dict[str, Any]:
     """
     Convert an Open-Meteo response into the flat payload we normalize from
 
@@ -513,7 +519,7 @@ def _reshape(payload: dict) -> Dict[str, Any]:
     # the unit system rides along in the response so we can convert distances
     units = "us"
     hourly_units = payload.get("hourly_units") or {}
-    if str(hourly_units.get("temperature_2m") or "").startswith("°C"):
+    if str(hourly_units.get("temperature_2m") or "").startswith("\u00b0C"):
         units = "si"
 
     # build the three blocks and stitch them together
@@ -545,16 +551,16 @@ def _reshape_current(payload: dict, units: str) -> Dict[str, Any]:
     visibility = _visibility(_pick(hourly, "visibility", index), units) \
         if index is not None else None
     uv = _pick(hourly, "uv_index", index) if index is not None else None
+    precip_prob = _pick(hourly, "precipitation_probability", index) \
+        if index is not None else None
 
     # describe it
     is_day = bool(_num(cur.get("is_day")))
-    summary, icon = _describe(cur.get("weather_code"), is_day)
+    summary, icon = describe(cur.get("weather_code"), is_day)
 
     # and lay it out the way the normalizer expects
     humidity = _num(cur.get("relative_humidity_2m"))
     cloud = _num(cur.get("cloud_cover"))
-    precip_prob = _pick(hourly, "precipitation_probability", index) \
-        if index is not None else None
     return {
         "time": _num(cur.get("time")),
         "summary": summary,
@@ -571,7 +577,7 @@ def _reshape_current(payload: dict, units: str) -> Dict[str, Any]:
         "uvIndex": uv,
         "visibility": visibility,
         "precipProbability": None if precip_prob is None else precip_prob / 100.0,
-        "precipType": _precip_type(cur.get("weather_code")),
+        "precipType": precip_type(cur.get("weather_code")),
     }
 
 
@@ -604,7 +610,7 @@ def _nearest_hour_index(hourly: dict, when: Optional[float]) -> Optional[int]:
     return best_index
 
 
-def _reshape_hourly(payload: dict, units: str) -> list[dict]:
+def _reshape_hourly(payload: dict, units: str) -> list:
     """
     Flatten the hourly series
 
@@ -623,7 +629,7 @@ def _reshape_hourly(payload: dict, units: str) -> list[dict]:
     start = _nearest_hour_index(hourly, time.time()) or 0
 
     # walk what remains
-    out: list[dict] = []
+    out: list = []
     for index in range(start, len(times)):
         stamp = _num(times[index])
         if stamp is None:
@@ -631,9 +637,7 @@ def _reshape_hourly(payload: dict, units: str) -> list[dict]:
 
         # describe the hour
         is_day = bool(_pick(hourly, "is_day", index))
-        summary, icon = _describe(
-            (hourly.get("weather_code") or [None] * (index + 1))[index], is_day
-        )
+        summary, icon = describe(_code_at(hourly, index), is_day)
 
         # fold the percentages down and lay the row out
         humidity = _pick(hourly, "relative_humidity_2m", index)
@@ -659,7 +663,7 @@ def _reshape_hourly(payload: dict, units: str) -> list[dict]:
     return out
 
 
-def _reshape_daily(payload: dict) -> list[dict]:
+def _reshape_daily(payload: dict) -> list:
     """
     Flatten the daily series
 
@@ -681,25 +685,21 @@ def _reshape_daily(payload: dict) -> list[dict]:
     derived = _daily_from_hourly(payload.get("hourly") or {})
 
     # walk each day
-    out: list[dict] = []
+    out: list = []
     for index, raw_time in enumerate(times):
         stamp = _num(raw_time)
         if stamp is None:
             continue
 
         # describe it, days are always drawn with the daytime icon
-        summary, icon = _describe(
-            (daily.get("weather_code") or [None] * (index + 1))[index], True
-        )
+        code = _code_at(daily, index)
+        summary, icon = describe(code, True)
 
         # the api gives probability as a whole percentage
         precip = _pick(daily, "precipitation_probability_max", index)
 
-        # snow accumulation comes back separately from the liquid total
-        snow = _pick(daily, "snowfall_sum", index)
-
         # merge the api values with whatever the hourly rollup produced
-        extra = derived.get(_day_key(stamp), {})
+        extra = derived.get(day_key(stamp), {})
         out.append({
             "time": stamp,
             "summary": summary,
@@ -709,19 +709,17 @@ def _reshape_daily(payload: dict) -> list[dict]:
             "apparentTemperatureHigh": _pick(daily, "apparent_temperature_max", index),
             "apparentTemperatureLow": _pick(daily, "apparent_temperature_min", index),
             "precipProbability": None if precip is None else precip / 100.0,
-            "precipType": _precip_type(
-                (daily.get("weather_code") or [None] * (index + 1))[index]
-            ),
+            "precipType": precip_type(code),
             "precipAccumulation": _pick(daily, "precipitation_sum", index),
             "liquidAccumulation": _pick(daily, "rain_sum", index),
-            "snowAccumulation": snow,
+            "snowAccumulation": _pick(daily, "snowfall_sum", index),
             "windSpeed": _pick(daily, "wind_speed_10m_max", index),
             "windGust": _pick(daily, "wind_gusts_10m_max", index),
             "windBearing": _pick(daily, "wind_direction_10m_dominant", index),
             "uvIndex": _pick(daily, "uv_index_max", index),
             "sunriseTime": _pick(daily, "sunrise", index),
             "sunsetTime": _pick(daily, "sunset", index),
-            "moonPhase": _moon_phase(stamp),
+            "moonPhase": moon_phase(stamp),
             "humidity": extra.get("humidity"),
             "dewPoint": extra.get("dewPoint"),
             "pressure": extra.get("pressure"),
@@ -731,7 +729,7 @@ def _reshape_daily(payload: dict) -> list[dict]:
     return out
 
 
-def _day_key(epoch: float) -> int:
+def day_key(epoch: float) -> int:
     """
     Bucket a timestamp down to its day
 
@@ -771,7 +769,7 @@ def _daily_from_hourly(hourly: dict) -> Dict[int, Dict[str, float]]:
         stamp = _num(raw_time)
         if stamp is None:
             continue
-        bucket = totals.setdefault(_day_key(stamp), {})
+        bucket = totals.setdefault(day_key(stamp), {})
         for source, target in wanted.items():
             value = _pick(hourly, source, index)
             if value is not None:
@@ -798,7 +796,7 @@ def geocode(name: str, user_agent: str = "kptv-weather/1.0") -> Optional[dict]:
     """
     Look a place name up and return its coordinates
 
-    Used for locations outside the bundled US ZIP data.
+    Used for locations outside the bundled US ZIP lookup.
 
     @param name: str The place name to search for
     @param user_agent: str Sent with the request
@@ -835,38 +833,3 @@ def geocode(name: str, user_agent: str = "kptv-weather/1.0") -> Optional[dict]:
         "city": str(hit.get("name") or "").strip(),
         "state": str(hit.get("admin1") or hit.get("country") or "").strip(),
     }
-
-
-def reverse_name(lat: float, lon: float,
-                 user_agent: str = "kptv-weather/1.0") -> Optional[str]:
-    """
-    Find the nearest named place to a coordinate pair
-
-    @param lat: float Latitude in decimal degrees
-    @param lon: float Longitude in decimal degrees
-    @param user_agent: str Sent with the request
-    @return str|None: A display name, or None when nothing was found
-    """
-
-    # the geocoder has no reverse mode, so search a coarse grid label instead
-    # and let the bundled city data handle the precise case
-    try:
-        resp = requests.get(
-            GEOCODE_URL,
-            params={"name": f"{lat:.2f},{lon:.2f}", "count": 1, "format": "json"},
-            headers={"User-Agent": user_agent, "Accept": "application/json"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-    except (requests.RequestException, ValueError):
-        return None
-
-    # pull a display name out if there was a hit at all
-    results = payload.get("results") if isinstance(payload, dict) else None
-    if not isinstance(results, list) or not results:
-        return None
-    hit = results[0]
-    city = str(hit.get("name") or "").strip()
-    state = str(hit.get("admin1") or "").strip()
-    return f"{city}, {state}".strip(", ") or None

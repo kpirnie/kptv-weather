@@ -1,32 +1,78 @@
+# kptv-weather - one station per container
+#
+# ffmpeg is NOT bundled. Bind mount a STATIC ffmpeg build and point
+# KPTVW_FFMPEG_PATH at it. Pass /dev/dri through and hardware encoding is
+# detected and used automatically; without it the software encoder is used.
+
 services:
-  kptv-weather:
+
+  weather:
     image: ghcr.io/kpirnie/kptv-weather:latest
-    #image: ghcr.io/kpirnie/kptv-weather:dev
-    container_name: kptv_weather
+    container_name: kptv-weather
     restart: unless-stopped
+
     ports:
-      - WHATEVER_PORT_YOU_WANT_TO_USE:8080
-      
-    # to utilize ffmpeg, you must have it installed on your machine and add these 2 volumes
-    # make sure to change the path to where ffmpeg and ffprobe are located on your machine  
-    #volumes:
-      #- /YOUR/PATH/TO/ffmpeg:/usr/local/bin/ffmpeg:ro
-      #- /YOUR/PATH/TO/ffprobe:/usr/local/bin/ffprobe:ro
-      # you'll also need to add your machines drivers
-      #- /usr/lib/x86_64-linux-gnu/dri:/usr/lib/x86_64-linux-gnu/dri:ro
-    # for hardware acceleration with ffmpeg
-    #devices:
-    #  - /dev/dri:/dev/dri
-    # necessary for hardware support
-    #group_add:
-    #  - video
-    #  - render
+      - "5960:5960"
 
+    devices:
+      # hardware encoding, drop this line to force software
+      - /dev/dri:/dev/dri
 
-    # Health check
-    healthcheck:
-      test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    volumes:
+      # REQUIRED: a static ffmpeg build
+      - /opt/ffmpeg/ffmpeg:/usr/local/bin/ffmpeg:ro
+      # some static builds still want their driver tree alongside them
+      # - /usr/lib/x86_64-linux-gnu/dri:/usr/lib/x86_64-linux-gnu/dri:ro
+      # optional background music, shuffled and looped
+      - /srv/media/weather-music:/music:ro
+      # optional branding: drop logo.png, fonts/, and icons/ in here
+      # - /srv/config/kptv-weather/assets:/app/assets:ro
+
+    environment:
+      # --- location: a ZIP, or a lat/lon pair, or a place name -------------
+      KPTVW_ZIP: "84101"
+      # KPTVW_LAT: "51.5074"
+      # KPTVW_LON: "-0.1278"
+      KPTVW_LOCATION_NAME: ""
+      KPTVW_TZ: ""
+
+      # --- channel identity ------------------------------------------------
+      KPTVW_CHANNEL_NAME: "Weather"
+      KPTVW_CHANNEL_LOGO: ""
+
+      # --- encoder ---------------------------------------------------------
+      KPTVW_FFMPEG_PATH: "/usr/local/bin/ffmpeg"
+      KPTVW_ENCODER: "auto"
+      KPTVW_ENCODER_PRESET: "veryfast"
+      KPTVW_RESOLUTION: "1920x1080"
+      KPTVW_FPS: "30"
+      KPTVW_VIDEO_KBPS: "3500"
+      KPTVW_AUDIO_KBPS: "128"
+
+      # --- http service ----------------------------------------------------
+      KPTVW_HTTP_HOST: "0.0.0.0"
+      KPTVW_HTTP_PORT: "5960"
+      KPTVW_STREAM_PATH: "/stream.ts"
+      KPTVW_PLAYLIST_PATH: "/playlist.m3u8"
+      # what the playlist advertises; set this when behind a proxy
+      KPTVW_BASE_URL: "http://10.89.1.1:5960"
+
+      # --- data ------------------------------------------------------------
+      KPTVW_UNITS: "us"
+      KPTVW_DATA_INTERVAL_SEC: "600"
+      KPTVW_REGIONAL_INTERVAL_SEC: "5400"
+      KPTVW_REGIONAL_CITIES: "6"
+      KPTVW_RADAR_SOURCE: "auto"
+
+      # --- presentation ----------------------------------------------------
+      KPTVW_PAGE_SECONDS: "14"
+      KPTVW_TICKER_SPEED: "120"
+      KPTVW_MUSIC_DIR: "/music"
+      KPTVW_MUSIC_VOLUME: "50"
+
+      # --- news ticker: ignored entirely while any weather alert is active --
+      KPTVW_RSS_URLS: ""
+      KPTVW_RSS_REFRESH_SEC: "300"
+      KPTVW_RSS_MAX_ITEMS: "3"
+
+      # DEBUG: "true"

@@ -26,80 +26,6 @@ from .fanout import TSBroker
 logger = logging.getLogger(__name__)
 
 
-class StreamServer:
-    """
-    Owns the listening socket and the handler bound to a broker
-    """
-
-    def __init__(self, cfg: Config, broker: TSBroker):
-        """
-        Build the server
-
-        @param cfg: Config The runtime configuration
-        @param broker: TSBroker The fanout the stream is pulled from
-        """
-
-        # everything the handler needs, since handlers get built per request
-        self.cfg = cfg
-        self.broker = broker
-        self._server: Optional[ThreadingHTTPServer] = None
-        self._thread: Optional[threading.Thread] = None
-
-    def start(self) -> None:
-        """
-        Bind the socket and begin serving in the background
-
-        @return None
-        """
-
-        # already running
-        if self._server is not None:
-            return
-
-        # the handler needs a route back to us, so close over it
-        cfg = self.cfg
-        broker = self.broker
-
-        class _Handler(_StreamHandler):
-            _cfg = cfg
-            _broker = broker
-
-        # bind and serve, reusing the address so a restart is not blocked
-        self._server = _ThreadingServer(
-            (self.cfg.http_host, self.cfg.http_port), _Handler
-        )
-        self._thread = threading.Thread(
-            target=self._server.serve_forever, name="http-server", daemon=True,
-        )
-        self._thread.start()
-
-        # say where we ended up
-        logger.info(
-            "serving %s and %s on %s:%s",
-            self.cfg.stream_path, self.cfg.playlist_path,
-            self.cfg.http_host, self.cfg.http_port,
-        )
-
-    def stop(self) -> None:
-        """
-        Stop serving and release the socket
-
-        @return None
-        """
-
-        # nothing to stop
-        if self._server is None:
-            return
-
-        # shut it down and wait for the thread to unwind
-        self._server.shutdown()
-        self._server.server_close()
-        if self._thread:
-            self._thread.join(timeout=2.0)
-        self._server = None
-        self._thread = None
-
-
 class _ThreadingServer(ThreadingHTTPServer):
     """
     Threaded server that lets us rebind straight after a restart
@@ -183,8 +109,9 @@ class _StreamHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        # everything else just gets a 200 or a 404 to match do_GET
-        if path == self._cfg.playlist_path.rstrip("/") or path in ("/health", "/status"):
+        # everything else gets a 200 or a 404 to match do_GET
+        known = (self._cfg.playlist_path.rstrip("/"), "/health", "/status")
+        if path in known:
             self.send_response(200)
             self.send_header("Connection", "close")
             self.end_headers()
@@ -306,3 +233,75 @@ class _StreamHandler(BaseHTTPRequestHandler):
 
         # and fall back to the bind address if there was not even one of those
         return f"http://{self._cfg.http_host}:{self._cfg.http_port}"
+
+
+class StreamServer:
+    """
+    Owns the listening socket and the handler bound to a broker
+    """
+
+    def __init__(self, cfg: Config, broker: TSBroker):
+        """
+        Build the server
+
+        @param cfg: Config The runtime configuration
+        @param broker: TSBroker The fanout the stream is pulled from
+        """
+
+        # everything the handler needs, since handlers get built per request
+        self.cfg = cfg
+        self.broker = broker
+        self._server: Optional[_ThreadingServer] = None
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        """
+        Bind the socket and begin serving in the background
+
+        @return None
+        """
+
+        # already running
+        if self._server is not None:
+            return
+
+        # the handler needs a route back to us, so close over it
+        cfg = self.cfg
+        broker = self.broker
+
+        class _Handler(_StreamHandler):
+            _cfg = cfg
+            _broker = broker
+
+        # bind and serve, reusing the address so a restart is not blocked
+        self._server = _ThreadingServer((self.cfg.http_host, self.cfg.http_port),
+                                        _Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever,
+                                        name="http-server", daemon=True)
+        self._thread.start()
+
+        # say where we ended up
+        logger.info(
+            "serving %s and %s on %s:%s",
+            self.cfg.stream_path, self.cfg.playlist_path,
+            self.cfg.http_host, self.cfg.http_port,
+        )
+
+    def stop(self) -> None:
+        """
+        Stop serving and release the socket
+
+        @return None
+        """
+
+        # nothing to stop
+        if self._server is None:
+            return
+
+        # shut it down and wait for the thread to unwind
+        self._server.shutdown()
+        self._server.server_close()
+        if self._thread:
+            self._thread.join(timeout=2.0)
+        self._server = None
+        self._thread = None

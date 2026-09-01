@@ -49,7 +49,7 @@ class Subscriber:
         """
 
         # the outbound chunk queue and the flag that ends the read loop
-        self.queue: queue.Queue[Optional[bytes]] = queue.Queue(maxsize=max_queue)
+        self.queue: queue.Queue = queue.Queue(maxsize=max_queue)
         self.closed = False
 
     def close(self) -> None:
@@ -100,7 +100,7 @@ class TSBroker:
 
         # everything below is touched from both the reader and the http threads
         self._lock = threading.Lock()
-        self._subscribers: set[Subscriber] = set()
+        self._subscribers: set = set()
         self._max_queue = max(8, int(max_queue))
 
         # leftover bytes from a feed that did not land on a packet boundary
@@ -114,7 +114,7 @@ class TSBroker:
 
     # ------------------------- clients -------------------------
 
-    def subscribe(self) -> tuple[Subscriber, bytes]:
+    def subscribe(self) -> tuple:
         """
         Register a new client and hand back its catch-up bytes
 
@@ -278,7 +278,7 @@ class TSBroker:
             targets = list(self._subscribers)
 
         # push to each one, collecting anybody who cannot keep up
-        stalled: list[Subscriber] = []
+        stalled: list = []
         for sub in targets:
             if sub.closed:
                 stalled.append(sub)

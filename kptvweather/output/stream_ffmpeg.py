@@ -47,27 +47,14 @@ class FFMPEGStreamer:
     a continuous live channel rather than something started per client.
     """
 
-    def __init__(
-        self,
-        ffmpeg_path: str,
-        width: int,
-        height: int,
-        fps: int,
-        on_output: Callable[[bytes], None],
-        *,
-        music_playlist: Optional[str] = None,
-        music_volume: float = 0.5,
-        vb_kbps: int = 3500,
-        ab_kbps: int = 128,
-        audio_sample_rate: int = 48000,
-        video_encoder: str = "auto",
-        encoder_preset: str = "veryfast",
-        threads: int = 2,
-        gop_seconds: float = 1.0,
-        pat_period: float = 0.5,
-        pcr_period_ms: int = 40,
-        max_queue: int = 2,
-    ):
+    def __init__(self, ffmpeg_path: str, width: int, height: int, fps: int,
+                 on_output: Callable, *, music_playlist: Optional[str] = None,
+                 music_volume: float = 0.5, vb_kbps: int = 3500,
+                 ab_kbps: int = 128, audio_sample_rate: int = 48000,
+                 video_encoder: str = "auto", encoder_preset: str = "veryfast",
+                 threads: int = 2, gop_seconds: float = 1.0,
+                 pat_period: float = 0.5, pcr_period_ms: int = 40,
+                 max_queue: int = 2):
         """
         Build the streamer
 
@@ -120,20 +107,18 @@ class FFMPEGStreamer:
         self._proc_dead = False
         self._stop_event = threading.Event()
 
-        # the frame queue and its writer
-        self._queue: queue.Queue[Optional[bytes]] = queue.Queue(
-            maxsize=max(1, int(max_queue))
-        )
+        # the frame queue and its pump threads
+        self._queue: queue.Queue = queue.Queue(maxsize=max(1, int(max_queue)))
         self._writer_thread: Optional[threading.Thread] = None
         self._reader_thread: Optional[threading.Thread] = None
 
     # ------------------------- encoder selection -------------------------
 
-    def _choose_encoder(self) -> tuple[str, list[str], list[str]]:
+    def _choose_encoder(self) -> tuple:
         """
         Pick a video encoder and build its arguments
 
-        @return tuple: Encoder name, its input-side arguments, its output args
+        @return tuple: Encoder name, its pre-input arguments, its output args
         """
 
         # rate control shared by every encoder we support
@@ -165,7 +150,7 @@ class FFMPEGStreamer:
         logger.info("no hardware encoder detected, using libx264")
         return self._enc_args("libx264", common)
 
-    def _enc_args(self, enc: str, base: list[str]) -> tuple[str, list[str], list[str]]:
+    def _enc_args(self, enc: str, base: list) -> tuple:
         """
         Build the argument lists for a specific encoder
 
@@ -175,8 +160,8 @@ class FFMPEGStreamer:
         """
 
         # anything that has to appear before the inputs lands here
-        pre: list[str] = []
-        args: list[str] = []
+        pre: list = []
+        args: list = []
 
         # nvidia
         if enc == "h264_nvenc":
@@ -361,7 +346,7 @@ class FFMPEGStreamer:
 
     # ------------------------- command -------------------------
 
-    def _build_command(self) -> list[str]:
+    def _build_command(self) -> list:
         """
         Assemble the full ffmpeg command line
 

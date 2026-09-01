@@ -11,8 +11,8 @@ the http service that hands it to clients.
 """
 
 # setup the imports
-from .fanout import TSBroker, Subscriber
+from .fanout import Subscriber, TSBroker
 from .http_server import StreamServer
 from .stream_ffmpeg import FFMPEGStreamer
 
-__all__ = ["TSBroker", "Subscriber", "StreamServer", "FFMPEGStreamer"]
+__all__ = ["Subscriber", "TSBroker", "StreamServer", "FFMPEGStreamer"]

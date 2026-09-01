@@ -1,0 +1,31 @@
+services:
+  kptv-weather:
+    image: localhost/kptest
+    container_name: kptv_weather
+    restart: unless-stopped
+    ports:
+      - WHATEVER_PORT_YOU_WANT_TO_USE:8080
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
+      - 8.8.4.4
+    volumes:
+      - /usr/local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
+      - /usr/local/bin/ffprobe:/usr/local/bin/ffprobe:ro
+      # necessary for hardware support
+      - /usr/lib/x86_64-linux-gnu/dri:/usr/lib/x86_64-linux-gnu/dri:ro
+    devices:
+      - /dev/dri:/dev/dri
+    # necessary for hardware support
+    group_add:
+      - video
+      - render
+
+    # Health check
+    healthcheck:
+      test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

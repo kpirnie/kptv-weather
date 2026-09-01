@@ -63,23 +63,23 @@ class NWSAlertClient:
 
         # cache state
         self._lock = threading.RLock()
-        self._alerts: list[dict] = []
+        self._alerts: list = []
         self._fetched_at = 0.0
 
-    def alerts(self) -> list[dict]:
+    def alerts(self) -> list:
         """
         Active alerts for the configured point
 
         Never raises: a failed fetch keeps whatever was last known good, so
         an alert already on screen does not vanish because of one bad request.
 
-        @return list: Normalized alert dicts, newest first
+        @return list: Normalized alert dicts, most severe first
         """
 
         # serve the cached set while it is fresh
         now = time.time()
         with self._lock:
-            if self._alerts is not None and now - self._fetched_at < self.ttl:
+            if self._fetched_at and now - self._fetched_at < self.ttl:
                 return list(self._alerts)
 
         # go get them
@@ -96,7 +96,7 @@ class NWSAlertClient:
             self._fetched_at = time.time()
             return list(fetched)
 
-    def _fetch(self) -> list[dict]:
+    def _fetch(self) -> list:
         """
         Request and normalize the active alerts
 
@@ -126,7 +126,7 @@ class NWSAlertClient:
         if not isinstance(features, list):
             return []
 
-        out: list[dict] = []
+        out: list = []
         for feature in features:
             alert = self._normalize(feature)
             if alert:

@@ -12,9 +12,6 @@ National Weather Service for active alerts. Neither needs an API key.
 
 # setup the imports
 from .nws import NWSAlertClient
-from .openmeteo import OpenMeteoClient, WeatherError, geocode, reverse_name
+from .openmeteo import OpenMeteoClient, WeatherError, geocode
 
-__all__ = [
-    "NWSAlertClient", "OpenMeteoClient", "WeatherError", "geocode",
-    "reverse_name",
-]
+__all__ = ["NWSAlertClient", "OpenMeteoClient", "WeatherError", "geocode"]
