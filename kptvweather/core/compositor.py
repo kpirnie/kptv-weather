@@ -36,19 +36,48 @@ class Compositor:
         self.front = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
         self.back = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
 
-    def compose(self, layers: Iterable) -> None:
+        # the flattened backdrop of everything that is not animating
+        self._base = None
+        self._base_key = None
+
+    def compose(self, layers: Iterable, static_dirty: bool = True) -> None:
         """
         Rebuild the back buffer from the visible layers
 
         @param layers: Iterable The layer stack, already sorted by z
+        @param static_dirty: bool Whether the cached backdrop must be rebuilt
         @return None
         """
 
-        # start from opaque black so nothing from the last frame bleeds through
-        self.back.paste((0, 0, 0, 255), (0, 0, self.w, self.h))
+        # a page flip moves no pixels of its own, so the backdrop has to
+        # follow what is actually on screen as well
+        visible_key = tuple(bool(getattr(layer, "visible", True))
+                            for layer in layers)
+        if visible_key != self._base_key:
+            self._base_key = visible_key
+            static_dirty = True
 
-        # then paste each visible layer using its own alpha as the mask
+        # everything that is not animating gets flattened once and reused,
+        # which is what makes compositing on every frame affordable
+        if static_dirty or self._base is None:
+            if self._base is None:
+                self._base = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
+            self._base.paste((0, 0, 0, 255), (0, 0, self.w, self.h))
+            for layer in layers:
+                if getattr(layer, "per_frame", False):
+                    continue
+                if not getattr(layer, "visible", True):
+                    continue
+                x, y, w, h = layer.bounds
+                if w <= 0 or h <= 0:
+                    continue
+                self._base.paste(layer.surface, (x, y), layer.surface)
+
+        # then the backdrop, with only the animating layers over the top
+        self.back.paste(self._base, (0, 0))
         for layer in layers:
+            if not getattr(layer, "per_frame", False):
+                continue
             if not getattr(layer, "visible", True):
                 continue
             x, y, w, h = layer.bounds

@@ -21,14 +21,16 @@ from PIL import Image, ImageDraw
 from .. import draw, theme
 from ..core.layer import Layer
 
-# how much blank space separates the end of the text from its next repeat
-GAP_FRACTION = 0.25
-
+# what sits between one pass of the text and the next
+SEPARATOR = "    \u2022    "
 
 class TickerLayer(Layer):
     """
     The scrolling text strip
     """
+
+    # it moves every frame, so the compositor pastes it every frame
+    per_frame = True
 
     def __init__(self, x: int, y: int, w: int, h: int, get_text: Callable,
                  get_label: Callable, get_accent: Callable,
@@ -60,7 +62,6 @@ class TickerLayer(Layer):
         self._strip: Image.Image = None
         self._strip_key = None
         self._offset = 0.0
-        self._last_tick = None
 
     def _label_width(self) -> int:
         """
@@ -81,22 +82,23 @@ class TickerLayer(Layer):
         @return None
         """
 
-        # measure it in the face we will draw it in
+        # measure one pass of it, separator included, in the face we draw in
         height = self.surface.size[1]
         face = theme.font("medium", max(10, int(round(height * 0.46))))
         probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        text_width = draw.measure(probe, text, face)[0]
+        unit = f"{text}{SEPARATOR}"
+        span = max(1, int(round(probe.textlength(unit, font=face))))
 
-        # the gap has to be at least a full window wide, or the crop below
-        # runs off the end of the strip and the loop plays a blank stretch
+        # tile it until a full window always follows the read head, so the
+        # crop below wraps straight back into the text with no blank stretch
         window_w = max(1, self.surface.size[0] - self._label_width()
                        - self.s(16, 4))
-        gap = max(window_w, self.s(80, 20), int(text_width * GAP_FRACTION))
-        span = text_width + gap
-        strip = Image.new("RGBA", (max(1, span * 2), height), (0, 0, 0, 0))
+        repeats = max(2, (window_w + span - 1) // span + 1)
+        strip = Image.new("RGBA", (span * repeats, height), (0, 0, 0, 0))
         pen = ImageDraw.Draw(strip)
-        draw.text(pen, (0, height // 2), text, face, theme.TEXT, anchor="lm")
-        draw.text(pen, (span, height // 2), text, face, theme.TEXT, anchor="lm")
+        for index in range(repeats):
+            draw.text(pen, (span * index, height // 2), unit, face,
+                      theme.TEXT, anchor="lm")
 
         # keep it, along with the loop length
         self._strip = strip
@@ -122,13 +124,11 @@ class TickerLayer(Layer):
             self._build_strip(text, key)
             self._offset = 0.0
 
-        # advance by however long it has actually been since the last frame
-        if self._last_tick is not None:
-            elapsed = max(0.0, now - self._last_tick)
-            self._offset = (self._offset + elapsed * self.px_per_sec * self.scale)
-            if self._span > 0:
-                self._offset %= self._span
-        self._last_tick = now
+        # advance by exactly one frame's worth, so every presented frame
+        # moves the same number of pixels
+        self._offset += self.px_per_sec * self.scale * self.min_interval
+        if self._span > 0:
+            self._offset %= self._span
 
         # start clean
         self.clear()

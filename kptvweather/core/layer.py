@@ -27,6 +27,9 @@ class Layer:
     # where this sits in the stack, higher draws later
     z: int = 0
 
+    # whether this layer animates and has to be pasted on every frame
+    per_frame: bool = False
+
     def __init__(self, x: int, y: int, w: int, h: int,
                  min_interval: float = 1.0, scale: float = 1.0):
         """

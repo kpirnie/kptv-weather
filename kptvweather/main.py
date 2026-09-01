@@ -550,7 +550,7 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
         get_label=lambda: str(read("ticker_label", "WEATHER") or "WEATHER"),
         get_accent=lambda: theme.ALERT if read("alerts", []) else theme.ACCENT,
         px_per_sec=cfg.ticker_speed_px_per_sec,
-        min_interval=1 / 30.0, scale=scale,
+        min_interval=1.0 / max(1, int(cfg.output_fps)), scale=scale,
     )
     ticker.z = 200
     layers.append(ticker)

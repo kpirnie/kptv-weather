@@ -79,6 +79,7 @@ class Scheduler:
 
             # tick every layer that is due, noting whether any of them moved
             dirty = False
+            static_dirty = False
             while self.heap and self.heap[0][0] <= now:
                 _, index = heapq.heappop(self.heap)
                 layer = self.layers[index]
@@ -87,18 +88,29 @@ class Scheduler:
                 try:
                     if layer.tick(now) and layer.visible:
                         dirty = True
+                        if not getattr(layer, "per_frame", False):
+                            static_dirty = True
                 except Exception:
                     logger.exception("layer %s failed to tick",
                                      layer.__class__.__name__)
 
+                # anything running at frame rate rides the frame grid, so its
+                # motion lands once per presented frame instead of drifting
+                if layer.min_interval <= self.interval:
+                    wake = self.next_frame + self.interval
+                    while wake <= now:
+                        wake += self.interval
+                else:
+                    wake = now + layer.min_interval
+
                 # and put it back for its next turn
-                heapq.heappush(self.heap, (now + layer.min_interval, index))
+                heapq.heappush(self.heap, (wake, index))
 
             # recompose only when something actually changed, but always feed
             # the encoder on schedule so the stream stays constant rate
             if now >= self.next_frame:
                 if dirty:
-                    compositor.compose(self.layers)
+                    compositor.compose(self.layers, static_dirty)
                     frame = compositor.present()
                 else:
                     frame = compositor.front
