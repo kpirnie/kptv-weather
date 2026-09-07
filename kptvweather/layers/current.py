@@ -143,13 +143,15 @@ class CurrentLayer(Layer):
         low = str(data.get("low_display") or "--\u00b0")
         range_face = theme.font("semibold", self.s(30, 11))
         label_face = theme.font("semibold", self.s(20, 9))
+        # cleared past the phrase above, whatever size it settled at
+        baseline = self.s(44) + getattr(face, "size", self.s(40)) + self.s(38)
         cursor = left
         for label, value, tint in (("HIGH", high, theme.HIGHLIGHT),
                                    ("LOW", low, theme.ACCENT)):
-            draw.text(pen, (cursor, self.s(102)), label, label_face, tint,
+            draw.text(pen, (cursor, baseline), label, label_face, tint,
                       anchor="ls")
             cursor += draw.measure(pen, label, label_face)[0] + self.s(10)
-            draw.text(pen, (cursor, self.s(102)), value, range_face,
+            draw.text(pen, (cursor, baseline), value, range_face,
                       theme.TEXT_DIM, anchor="ls")
             cursor += draw.measure(pen, value, range_face)[0] + self.s(28)
 
@@ -157,7 +159,7 @@ class CurrentLayer(Layer):
         sun_face = theme.font("medium", self.s(24, 10))
         sunrise = str(data.get("sunrise") or "--")
         sunset = str(data.get("sunset") or "--")
-        draw.text(pen, (left, self.s(150)),
+        draw.text(pen, (left, baseline + self.s(28)),
                   f"Sunrise {sunrise}    Sunset {sunset}", sun_face,
                   theme.TEXT_FAINT)
 
