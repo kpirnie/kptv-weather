@@ -277,15 +277,31 @@ def stat_tile(surface: Image.Image, box: tuple, label: str, value: str,
     # everything else prints over it
     pen = ImageDraw.Draw(surface)
 
-    # the caption
+    # the caption and the room the pair have to share
     pad = max(6, int(round(14 * scale)))
     rule = max(2, int(round(3 * scale)))
     label_face = theme.font("semibold", max(10, int(round(20 * scale))))
+    label_size = getattr(label_face, "size", 10)
+    value_size = max(12, int(round(38 * scale)))
+    inner_h = (bottom - top) - rule - pad * 2
+
+    # a short tile puts the two side by side instead of stacking them
+    if inner_h < label_size + value_size:
+        value_face = fit_face(pen, str(value), "bold",
+                              max(12, int(inner_h * 0.86)),
+                              max(10, (right - left) - pad * 3 -
+                                  measure(pen, str(label).upper(),
+                                          label_face)[0]))
+        center = top + rule + (bottom - top - rule) // 2
+        text(pen, (left + pad, center), str(label).upper(), label_face,
+             theme.TEXT_FAINT, anchor="lm")
+        text(pen, (right - pad, center), str(value), value_face, value_color,
+             anchor="rm")
+        return
+
+    # otherwise the caption sits over the value
     text(pen, (left + pad, top + rule + pad), str(label).upper(), label_face,
          theme.TEXT_FAINT)
-
-    # and the value, shrunk to fit if it has to be
-    value_size = max(12, int(round(38 * scale)))
     face = fit_face(pen, str(value), "bold", value_size,
                     max(10, (right - left) - pad * 2))
     text(pen, (left + pad, bottom - pad), str(value), face, value_color,
