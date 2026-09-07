@@ -134,7 +134,8 @@ class _MapLayer(Layer):
         left = max(0, (resized.width - box_w) // 2)
         crop_top = max(0, (resized.height - box_h) // 2)
         cropped = resized.crop((left, crop_top, left + box_w, crop_top + box_h))
-        self.surface.paste(cropped, (inset, top), cropped)
+        draw.rounded_paste(self.surface, cropped, (inset, top),
+                           max(3, self.s(theme.RADIUS - 4)))
 
     def _draw_marker(self, pen: ImageDraw.ImageDraw, point: dict, bounds: tuple,
                      inset: int, top: int, box_w: int, box_h: int) -> None:

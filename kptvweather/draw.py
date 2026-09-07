@@ -211,6 +211,29 @@ def card(surface: Image.Image, box: tuple, scale: float,
         mask, Image.new("L", mask.size, 0), strip.split()[3]
     ))
 
+def rounded_paste(surface: Image.Image, image: Image.Image, xy: tuple,
+                  radius: int) -> None:
+    """
+    Paste an image with its corners rounded off
+
+    @param surface: Image The surface to paint onto
+    @param image: Image The image to paste
+    @param xy: tuple Where the image's top left corner lands
+    @param radius: int The corner radius
+    @return None
+    """
+
+    # a square paste when there is nothing to round
+    if radius <= 0:
+        surface.paste(image, xy, image)
+        return
+
+    # mask the corners off and paste through it
+    mask = Image.new("L", image.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, image.size[0] - 1, image.size[1] - 1), radius=radius, fill=255
+    )
+    surface.paste(image, xy, mask)
 
 def accent_bar(pen: ImageDraw.ImageDraw, box: tuple,
                color: tuple = theme.ACCENT) -> None:
