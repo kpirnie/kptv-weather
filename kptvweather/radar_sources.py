@@ -44,6 +44,10 @@ RAINVIEWER_OPTIONS = "2/1_1"
 # largest and scale it into whatever box the page actually draws into
 RAINVIEWER_SIZE = 512
 
+# their public tiles stop here, and anything deeper comes back as a
+# placeholder image reading zoom level not supported
+RAINVIEWER_MAX_ZOOM = 7
+
 def fetch_noaa(south: float, west: float, north: float, east: float,
                width: int, height: int, user_agent: str = "kptv-weather/1.0",
                frames: int = 6, step_minutes: int = 10) -> list:
@@ -190,8 +194,10 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
         return []
 
     # work the zoom out from the span we were asked to cover, against the
-    # size we actually request rather than the size we draw at
-    zoom = _zoom_for_span(span_degrees, RAINVIEWER_SIZE)
+    # size we actually request rather than the size we draw at, then clamp
+    # it to what their public tiles will actually serve
+    zoom = min(RAINVIEWER_MAX_ZOOM,
+               _zoom_for_span(span_degrees, RAINVIEWER_SIZE))
 
     # take the tail of the loop and fetch each one
     out: list = []
