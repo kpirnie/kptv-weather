@@ -15,6 +15,7 @@ it, so the motion costs a copy rather than a repaint.
 # setup the imports
 from __future__ import annotations
 
+import threading
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw
@@ -75,6 +76,10 @@ class DailyLayer(Layer):
         self._travel = 0
         self._offset = -1
         self._shown_at = 0.0
+
+        # the cycler asks for the duration off its own thread, so the build
+        # has to be safe against the render thread doing it at the same time
+        self._lock = threading.Lock()
 
     def set_visible(self, visible: bool) -> None:
         """
@@ -167,10 +172,11 @@ class DailyLayer(Layer):
         days = list(self.get_days() or [])[:7]
         key = tuple((d.get("name"), d.get("high"), d.get("low"), d.get("icon"),
                      d.get("precip_display")) for d in days)
-        if self._strip is not None and key == self._last:
-            return
-        self._last = key
-        self._offset = -1
+        with self._lock:
+            if self._strip is not None and key == self._last:
+                return
+            self._last = key
+            self._offset = -1
 
         # nothing to show, so the window carries the notice on its own
         width, height = self.surface.size
@@ -181,8 +187,9 @@ class DailyLayer(Layer):
             face = theme.font("medium", self.s(30, 12))
             draw.text(pen, (width // 2, height // 2), "Forecast unavailable",
                       face, theme.TEXT_DIM, anchor="mm")
-            self._strip = strip
-            self._travel = 0
+            with self._lock:
+                self._strip = strip
+                self._travel = 0
             return
 
         # the shared temperature range every row's bar is drawn against
@@ -208,8 +215,9 @@ class DailyLayer(Layer):
                            span_high, index == 0)
 
         # keep it, along with how far it has to travel
-        self._strip = strip
-        self._travel = max(0, strip.size[1] - height)
+        with self._lock:
+            self._strip = strip
+            self._travel = max(0, strip.size[1] - height)
 
     def _draw_row(self, strip: Image.Image, pen: ImageDraw.ImageDraw,
                   day: dict, top: int, width: int, row_h: int,
