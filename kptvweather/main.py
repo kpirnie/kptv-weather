@@ -284,12 +284,8 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
         if view is None:
             return None, bounds
 
-        # cool it toward the palette, but only as far as the map pages are
-        # tinted so the two do not read as different maps
-        base = Image.alpha_composite(
-            view.image.convert("RGBA"),
-            Image.new("RGBA", view.image.size, (10, 15, 32, 60)),
-        )
+        # the map pages draw the tiles untouched, so this does too
+        base = view.image.convert("RGBA")
         radar_state["base"] = base
         radar_state["base_key"] = key
         radar_state["base_bounds"] = view.bounds
