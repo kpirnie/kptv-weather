@@ -142,10 +142,15 @@ class TickerLayer(Layer):
         width, height = self.surface.size
 
         # the strip body and the badge that heads it
-        draw.panel(pen, (0, 0, width, height), fill=theme.PANEL,
-                   outline=theme.PANEL_LINE)
+        draw.card(self.surface, (0, 0, width, height), self.scale)
         badge_w = self._label_width()
-        draw.panel(pen, (0, 0, badge_w, height), fill=accent, outline=None)
+        radius = max(4, self.s(theme.RADIUS))
+        draw.panel(pen, (0, 0, badge_w, height), fill=accent, outline=None,
+                   radius=radius)
+        draw.panel(pen, (badge_w - radius, 0, badge_w, height), fill=accent,
+                   outline=None)
+        draw.accent_bar(pen, (badge_w, 0, badge_w + max(2, self.s(3)), height),
+                        color=theme.HIGHLIGHT)
         badge_face = draw.fit_face(pen, label, "black",
                                    max(10, int(round(height * 0.40))),
                                    badge_w - self.s(16, 4))
