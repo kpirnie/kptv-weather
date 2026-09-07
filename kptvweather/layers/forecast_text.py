@@ -79,7 +79,8 @@ class ForecastTextLayer(Layer):
 
         # nothing to show
         if not periods:
-            draw.panel(pen, (0, 0, width, height))
+            draw.card(self.surface, (0, 0, width, height), self.scale,
+                      accent=theme.ACCENT)
             face = theme.font("medium", self.s(30, 12))
             draw.text(pen, (width // 2, height // 2), "Forecast unavailable",
                       face, theme.TEXT_DIM, anchor="mm")
@@ -108,7 +109,8 @@ class ForecastTextLayer(Layer):
 
         # the panel body
         bottom = top + panel_h
-        draw.panel(pen, (0, top, width, bottom))
+        draw.card(self.surface, (0, top, width, bottom), self.scale,
+                  accent=theme.HIGHLIGHT)
         rule = max(2, self.s(4))
         draw.accent_bar(pen, (0, top, width, top + rule))
 
