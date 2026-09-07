@@ -66,9 +66,9 @@ class HourlyGraphLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the panel the graph sits in
-        draw.panel(pen, (0, 0, width, height))
-        draw.accent_bar(pen, (0, 0, width, max(2, self.s(4))))
+        # the card the graph sits in
+        draw.card(self.surface, (0, 0, width, height), self.scale,
+                  accent=theme.HIGHLIGHT)
 
         # nothing to plot
         if len(points) < 2:
@@ -106,13 +106,17 @@ class HourlyGraphLayer(Layer):
         # the cloud cover and precipitation bars, drawn under the curve
         self._draw_bars(pen, points, pad_x, step, top, plot_h)
 
-        # the temperature curve itself
+        # the temperature curve itself, over a soft fill down to the baseline
         coords = []
         for index, point in enumerate(points):
             x = pad_x + step * index
             y = top + plot_h * (1.0 - (float(point["temp"]) - low) / span)
             coords.append((x, y))
-        pen.line(coords, fill=theme.ACCENT, width=max(2, self.s(5)), joint="curve")
+        pen.polygon(coords + [(coords[-1][0], top + plot_h),
+                              (coords[0][0], top + plot_h)],
+                    fill=theme.with_alpha(theme.ACCENT, 46))
+        pen.line(coords, fill=theme.HIGHLIGHT, width=max(2, self.s(5)),
+                 joint="curve")
 
         # the readings themselves
         dot = max(3, self.s(7))
@@ -168,7 +172,7 @@ class HourlyGraphLayer(Layer):
             if precip is not None:
                 bar_h = max_bar * (float(precip) / 100.0)
                 pen.rectangle([x + half * 0.2, base - bar_h, x + half * 2, base],
-                              fill=theme.with_alpha(theme.ACCENT_DIM, 200))
+                              fill=theme.with_alpha(theme.ACCENT, 190))
 
     def _draw_legend(self, pen: ImageDraw.ImageDraw, width: int,
                      height: int) -> None:
@@ -186,7 +190,7 @@ class HourlyGraphLayer(Layer):
         swatch = self.s(18, 6)
         y = self.s(22)
         cursor = width - self.s(60)
-        for label, color in (("PRECIP", theme.ACCENT_DIM),
+        for label, color in (("PRECIP", theme.ACCENT),
                              ("CLOUD", theme.TEXT_FAINT)):
             text_w = draw.measure(pen, label, face)[0]
             cursor -= text_w
