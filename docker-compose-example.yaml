@@ -68,6 +68,7 @@ services:
       # --- presentation ----------------------------------------------------
       KPTVW_PAGE_SECONDS: "14"
       KPTVW_TICKER_SPEED: "120"
+      KPTVW_SCROLL_SPEED: "60"
       KPTVW_MUSIC_DIR: "/music"
       KPTVW_MUSIC_VOLUME: "50"
 
@@ -75,5 +76,4 @@ services:
       KPTVW_RSS_URLS: ""
       KPTVW_RSS_REFRESH_SEC: "300"
       KPTVW_RSS_MAX_ITEMS: "3"
-
       # DEBUG: "true"

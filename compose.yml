@@ -76,6 +76,7 @@ services:
       # --- presentation ----------------------------------------------------
       KPTVW_PAGE_SECONDS: "14"
       KPTVW_TICKER_SPEED: "120"
+      KPTVW_SCROLL_SPEED: "60"
       KPTVW_MUSIC_DIR: "/music"
       KPTVW_MUSIC_VOLUME: "50"
 
@@ -83,14 +84,13 @@ services:
       KPTVW_RSS_URLS: "https://www.wwlp.com/feed/"
       KPTVW_RSS_REFRESH_SEC: "300"
       KPTVW_RSS_MAX_ITEMS: "20"
-
       # DEBUG: "true"
 
 
-    # Health check
-    #healthcheck:
-    #  test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
-    #  interval: 30s
-    #  timeout: 10s
-    #  retries: 3
-   #   start_period: 30s
+      # Health check
+      #healthcheck:
+      #  test: [ "CMD", "curl", "-v", "http://127.0.0.1:8080/ping" ]
+      #  interval: 30s
+      #  timeout: 10s
+      #  retries: 3
+      #   start_period: 30s
