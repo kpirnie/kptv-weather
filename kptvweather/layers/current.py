@@ -185,7 +185,7 @@ class CurrentLayer(Layer):
             left = column * (tile_w + gap)
             box_top = top + row * (tile_h + gap)
             draw.stat_tile(
-                pen,
+                self.surface,
                 (left, box_top, left + tile_w, box_top + tile_h),
                 label, str(data.get(field) or "--"), self.scale,
             )

@@ -169,7 +169,7 @@ class ForecastTextLayer(Layer):
             cell_left = left + column * (cell_w + gap)
             cell_top = top + row * (cell_h + gap)
             draw.stat_tile(
-                pen,
+                self.surface,
                 (cell_left, cell_top, cell_left + cell_w, cell_top + cell_h),
                 label, str(period.get(field) or "--"), self.scale,
             )

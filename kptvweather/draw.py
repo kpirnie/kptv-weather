@@ -2,8 +2,8 @@
 """
 Drawing Helpers Module
 
-The small painting routines every layer shares: panels, labelled text, and
-the measurement helpers that keep type inside its box.
+The small painting routines every layer shares: panels, cards, gradients,
+labelled text, and the measurement helpers that keep type inside its box.
 
 @package KPTV Weather
 @author Kevin Pirnie <me@kpirnie.com>
@@ -122,7 +122,6 @@ def panel(pen: ImageDraw.ImageDraw, box: tuple, fill: tuple = theme.PANEL,
         pen.rectangle(box, fill=fill, outline=outline, width=width)
 
 
-
 def gradient(surface: Image.Image, box: tuple, top_color: tuple,
              bottom_color: tuple, radius: int = 0) -> None:
     """
@@ -212,6 +211,7 @@ def card(surface: Image.Image, box: tuple, scale: float,
         mask, Image.new("L", mask.size, 0), strip.split()[3]
     ))
 
+
 def accent_bar(pen: ImageDraw.ImageDraw, box: tuple,
                color: tuple = theme.ACCENT) -> None:
     """
@@ -230,12 +230,12 @@ def accent_bar(pen: ImageDraw.ImageDraw, box: tuple,
     pen.rectangle(box, fill=color)
 
 
-def stat_tile(pen: ImageDraw.ImageDraw, box: tuple, label: str, value: str,
+def stat_tile(surface: Image.Image, box: tuple, label: str, value: str,
               scale: float, value_color: tuple = theme.TEXT) -> None:
     """
     Draw one labelled value tile
 
-    @param pen: ImageDraw The drawing context
+    @param surface: Image The surface to paint onto
     @param box: tuple Left, top, right, and bottom
     @param label: str The small caption above the value
     @param value: str The value itself
@@ -248,11 +248,15 @@ def stat_tile(pen: ImageDraw.ImageDraw, box: tuple, label: str, value: str,
     left, top, right, bottom = box
     if right <= left or bottom <= top:
         return
-    card(pen._image, box, scale, accent=theme.ACCENT,
+    card(surface, box, scale, accent=theme.ACCENT,
          top_color=theme.PANEL_ALT, bottom_color=theme.CARD_BOTTOM)
+
+    # everything else prints over it
+    pen = ImageDraw.Draw(surface)
 
     # the caption
     pad = max(6, int(round(14 * scale)))
+    rule = max(2, int(round(3 * scale)))
     label_face = theme.font("semibold", max(10, int(round(20 * scale))))
     text(pen, (left + pad, top + rule + pad), str(label).upper(), label_face,
          theme.TEXT_FAINT)
@@ -263,3 +267,4 @@ def stat_tile(pen: ImageDraw.ImageDraw, box: tuple, label: str, value: str,
                     max(10, (right - left) - pad * 2))
     text(pen, (left + pad, bottom - pad), str(value), face, value_color,
          anchor="ls")
+         
