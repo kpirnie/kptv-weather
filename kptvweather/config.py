@@ -82,6 +82,7 @@ class Config:
 
     # ui
     ticker_speed_px_per_sec: int
+    scroll_speed_px_per_sec: int
     page_duration_sec: int
     music_dir: Optional[str]
     music_volume: float
@@ -330,6 +331,7 @@ def from_env() -> Config:
         regional_cities=_env_int("REGIONAL_CITIES", 6, 0, 12),
         radar_source=_env_choice("RADAR_SOURCE", "noaa", VALID_RADAR),
         ticker_speed_px_per_sec=_env_int("TICKER_SPEED", 120, 10, 600),
+        scroll_speed_px_per_sec=_env_int("SCROLL_SPEED", 60, 5, 400),
         page_duration_sec=_env_int("PAGE_SECONDS", 14, 4, 120),
         music_dir=_music_dir(),
         music_volume=_env_float("MUSIC_VOLUME", 50.0, 0.0, 100.0) / 100.0,
