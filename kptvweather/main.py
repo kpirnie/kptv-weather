@@ -344,6 +344,16 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
         if not frames and cfg.radar_source in ("rainviewer", "auto", "noaa"):
             frames = radar_sources.fetch_rainviewer(lat, lon, width, height,
                                                     cfg.user_agent)
+
+            # these come back as bare reflectivity too, so they need the same
+            # backdrop under them or an empty sky renders as an empty box
+            base, _aligned = radar_base(box, width, height)
+            if frames and base is not None:
+                for frame in frames:
+                    overlay = frame["image"]
+                    if overlay.size != base.size:
+                        overlay = overlay.resize(base.size, Image.LANCZOS)
+                    frame["image"] = Image.alpha_composite(base, overlay)
             if frames:
                 source = radar_sources.RAINVIEWER_ATTRIBUTION
 
