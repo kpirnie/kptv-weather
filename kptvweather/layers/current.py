@@ -87,9 +87,9 @@ class CurrentLayer(Layer):
         grid_h = tile_h * tile_rows + self.s(16) * (tile_rows - 1)
         headline_h = max(self.s(160), height - grid_h - self.s(28))
 
-        # the headline panel
-        draw.panel(pen, (0, 0, width, headline_h))
-        draw.accent_bar(pen, (0, 0, width, max(2, self.s(4))))
+        # the headline card
+        draw.card(self.surface, (0, 0, width, headline_h), self.scale,
+                  accent=theme.HIGHLIGHT)
 
         # the icon
         pad = self.s(36, 10)
@@ -138,12 +138,20 @@ class CurrentLayer(Layer):
         face = draw.fit_face(pen, summary, "bold", self.s(40, 12), available)
         draw.text(pen, (left, self.s(44)), summary, face, theme.TEXT)
 
-        # today's range
+        # today's range, with the labels held back from the readings
         high = str(data.get("high_display") or "--\u00b0")
         low = str(data.get("low_display") or "--\u00b0")
         range_face = theme.font("semibold", self.s(30, 11))
-        draw.text(pen, (left, self.s(102)), f"High {high}    Low {low}",
-                  range_face, theme.TEXT_DIM)
+        label_face = theme.font("semibold", self.s(20, 9))
+        cursor = left
+        for label, value, tint in (("HIGH", high, theme.HIGHLIGHT),
+                                   ("LOW", low, theme.ACCENT)):
+            draw.text(pen, (cursor, self.s(102)), label, label_face, tint,
+                      anchor="ls")
+            cursor += draw.measure(pen, label, label_face)[0] + self.s(10)
+            draw.text(pen, (cursor, self.s(102)), value, range_face,
+                      theme.TEXT_DIM, anchor="ls")
+            cursor += draw.measure(pen, value, range_face)[0] + self.s(28)
 
         # and the sun times
         sun_face = theme.font("medium", self.s(24, 10))

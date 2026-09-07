@@ -248,11 +248,8 @@ def stat_tile(pen: ImageDraw.ImageDraw, box: tuple, label: str, value: str,
     left, top, right, bottom = box
     if right <= left or bottom <= top:
         return
-    panel(pen, box, fill=theme.PANEL_ALT, outline=theme.PANEL_LINE)
-
-    # its accent rule
-    rule = max(2, int(round(3 * scale)))
-    accent_bar(pen, (left, top, right, top + rule))
+    card(pen._image, box, scale, accent=theme.ACCENT,
+         top_color=theme.PANEL_ALT, bottom_color=theme.CARD_BOTTOM)
 
     # the caption
     pad = max(6, int(round(14 * scale)))

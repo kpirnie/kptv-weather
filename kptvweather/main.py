@@ -534,10 +534,15 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
     header_current.z = 200
     layers.append(header_current)
 
-    # the clock in column four
+    # the clock in column four, which also carries what is coming up next
+    holder: dict = {}
     clock_x, clock_w = columns[3]
     clock = ClockLayer(x=clock_x, y=band_top, w=clock_w, h=band_h,
-                       min_interval=1.0, scale=scale)
+                       min_interval=1.0, scale=scale,
+                       get_next=lambda: (
+                           holder["cycler"].next_title()
+                           if "cycler" in holder else ""
+                       ))
     clock.z = 200
     layers.append(clock)
 
@@ -555,13 +560,14 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
     ticker.z = 200
     layers.append(ticker)
 
-    def add_page(name: str, title: str, builder) -> None:
+    def add_page(name: str, title: str, builder, duration=None) -> None:
         """
         Register one page and its layers
 
         @param name: str The page's internal name
         @param title: str The title shown in the header
         @param builder: Callable Builds the page's body layers
+        @param duration: mixed A hold in seconds, or a callable returning one
         @return None
         """
 
@@ -584,7 +590,8 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
         # everything starts hidden, the cycler turns one page on
         for layer in page_layers:
             layer.set_visible(False)
-        pages.append({"name": name, "layers": page_layers})
+        pages.append({"name": name, "title": title, "layers": page_layers,
+                      "duration": duration})
         layers.extend(page_layers)
 
     # the pages, in the order they cycle
@@ -600,11 +607,28 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
                          min_interval=15.0, scale=scale)
     ])
 
-    add_page("daily", "7-Day Forecast", lambda b: [
-        DailyLayer(x=b[0], y=b[1], w=b[2], h=b[3],
-                   get_days=lambda: read("daily_days", []) or [],
-                   min_interval=30.0, scale=scale)
-    ])
+    daily = DailyLayer(x=0, y=0, w=1, h=1, get_days=lambda: [], scale=scale)
+
+    def build_daily(b):
+        """
+        Build the seven day page at the resolved content bounds
+
+        @param b: tuple The content box
+        @return list: The page's body layers
+        """
+
+        # rebuilt here so the layer owns a surface at the real size
+        nonlocal daily
+        daily = DailyLayer(x=b[0], y=b[1], w=b[2], h=b[3],
+                           get_days=lambda: read("daily_days", []) or [],
+                           min_interval=1.0 / max(1, int(cfg.output_fps)),
+                           scale=scale,
+                           px_per_sec=cfg.scroll_speed_px_per_sec,
+                           base_duration=cfg.page_duration_sec)
+        return [daily]
+
+    add_page("daily", "7-Day Forecast", build_daily,
+             duration=lambda: daily.duration())
 
     # radar is optional
     if cfg.radar_source != "off":
@@ -655,6 +679,7 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
 
     # start on the first page
     cycler = PageCycler(pages, cfg.page_duration_sec)
+    holder["cycler"] = cycler
     if pages:
         cycler.activate(0)
     return layers, cycler
