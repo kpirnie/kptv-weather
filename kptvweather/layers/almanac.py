@@ -65,9 +65,9 @@ class AlmanacLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the panel
-        draw.panel(pen, (0, 0, width, height))
-        draw.accent_bar(pen, (0, 0, width, max(2, self.s(4))))
+        # the card
+        draw.card(self.surface, (0, 0, width, height), self.scale,
+                  accent=theme.ACCENT)
 
         # nothing to show
         if not rows:
@@ -156,7 +156,8 @@ class AlmanacLayer(Layer):
         # the block body
         pad = self.s(24, 6)
         box = (left, pad, width - pad, height - pad)
-        draw.panel(pen, box, fill=theme.PANEL_ALT)
+        draw.card(self.surface, box, self.scale, accent=theme.HIGHLIGHT,
+                  top_color=theme.PANEL_ALT, bottom_color=theme.CARD_BOTTOM)
 
         # the moon itself, drawn at the actual phase
         size = min(self.s(180, 40), (box[2] - box[0]) - pad * 2,
