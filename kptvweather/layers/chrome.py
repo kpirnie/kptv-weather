@@ -104,13 +104,17 @@ class ChromeLayer(Layer):
         width, height = self.surface.size
 
         # the backdrop
-        pen.rectangle([0, 0, width, height], fill=theme.BACKGROUND)
+        draw.gradient(self.surface, (0, 0, width, height),
+                      theme.BACKGROUND_TOP, theme.BACKGROUND_BOTTOM)
 
-        # the header band, with a heavier rule under it
+        # the header band, with a two tone rule under it
         header_h = self.s(layout.HEADER_H, 40)
-        draw.panel(pen, (0, 0, width, header_h), fill=theme.PANEL, outline=None)
+        draw.gradient(self.surface, (0, 0, width, header_h), theme.PANEL_ALT,
+                      theme.PANEL)
         rule = max(2, self.s(4))
         draw.accent_bar(pen, (0, header_h - rule, width, header_h))
+        draw.accent_bar(pen, (0, header_h - rule, int(width * 0.32), header_h),
+                        color=theme.HIGHLIGHT)
 
         # the identity column
         columns = layout.header_columns(width, self.s)
@@ -150,8 +154,10 @@ class ChromeLayer(Layer):
         else:
             bar = self.s(8, 2)
             bar_h = self.s(72, 8)
-            draw.accent_bar(pen, (left, center - bar_h // 2, left + bar,
-                                  center - bar_h // 2 + bar_h))
+            draw.gradient(self.surface,
+                          (left, center - bar_h // 2, left + bar,
+                           center - bar_h // 2 + bar_h),
+                          theme.HIGHLIGHT, theme.ACCENT, radius=bar // 2)
             cursor = left + bar + self.s(20)
 
         # the channel identity
@@ -223,10 +229,10 @@ class ChromeLayer(Layer):
         # a full width bar in the alert colour
         strip_h = self.s(44, 16)
         top = header_h
-        draw.panel(pen, (0, top, width, top + strip_h), fill=theme.ALERT_DIM,
-                   outline=None)
+        draw.gradient(self.surface, (0, top, width, top + strip_h),
+                      theme.ALERT, theme.ALERT_DIM)
         draw.accent_bar(pen, (0, top, self.s(10, 3), top + strip_h),
-                        color=theme.ALERT)
+                        color=theme.HIGHLIGHT)
 
         # the leading alert, with a count when there are more behind it
         headline = str(alerts[0].get("title") or "").strip()
