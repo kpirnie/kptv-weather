@@ -30,7 +30,7 @@ class PageCycler:
         """
         Build the cycler
 
-        @param pages: list Page dicts of name and layers
+        @param pages: list Page dicts of name, title, layers, and duration
         @param interval_sec: float How long each page holds the screen
         """
 
@@ -42,6 +42,49 @@ class PageCycler:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._index = 0
+
+    def duration(self, index: int) -> float:
+        """
+        How long one page holds the screen
+
+        A page may carry its own duration, which is how the scrolling pages
+        stay up for exactly as long as their content takes to travel.
+
+        @param index: int Which page to measure, wrapped into range
+        @return float: The hold in seconds
+        """
+
+        # no pages, no hold
+        if not self.pages:
+            return self.interval
+
+        # a page level duration wins, otherwise the configured interval
+        page = self.pages[index % len(self.pages)]
+        value = page.get("duration")
+        if callable(value):
+            try:
+                value = value()
+            except Exception:
+                value = None
+        try:
+            return max(1.0, float(value))
+        except (TypeError, ValueError):
+            return self.interval
+
+    def next_title(self) -> str:
+        """
+        The title of the page that comes up after this one
+
+        @return str: The upcoming page's title
+        """
+
+        # nothing queued when there is nothing, or only one, to show
+        if len(self.pages) < 2:
+            return ""
+
+        # whatever sits after the current index
+        page = self.pages[(self._index + 1) % len(self.pages)]
+        return str(page.get("title") or page.get("name") or "")
 
     def activate(self, index: int) -> None:
         """
@@ -96,11 +139,11 @@ class PageCycler:
 
     def _loop(self) -> None:
         """
-        Advance to the next page on each interval
+        Advance to the next page once its hold has run out
 
         @return None
         """
 
         # wait returns true when we were told to stop, so this exits cleanly
-        while not self._stop.wait(self.interval):
+        while not self._stop.wait(self.duration(self._index)):
             self.activate(self._index + 1)
