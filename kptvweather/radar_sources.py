@@ -40,6 +40,9 @@ RAINVIEWER_ATTRIBUTION = "RainViewer"
 # how the RainViewer tiles are asked for: colour scheme, smoothing, and snow
 RAINVIEWER_OPTIONS = "2/1_1"
 
+# the composite endpoint only serves a fixed set of sizes, so we take the
+# largest and scale it into whatever box the page actually draws into
+RAINVIEWER_SIZE = 512
 
 def fetch_noaa(south: float, west: float, north: float, east: float,
                width: int, height: int, user_agent: str = "kptv-weather/1.0",
@@ -186,8 +189,9 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
     if not host or not isinstance(past, list) or not past:
         return []
 
-    # work the zoom out from the span we were asked to cover
-    zoom = _zoom_for_span(span_degrees, height)
+    # work the zoom out from the span we were asked to cover, against the
+    # size we actually request rather than the size we draw at
+    zoom = _zoom_for_span(span_degrees, RAINVIEWER_SIZE)
 
     # take the tail of the loop and fetch each one
     out: list = []
@@ -198,7 +202,7 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
             continue
 
         # RainViewer composes the whole frame for us
-        url = (f"{host}{path}/{max(width, height)}/{zoom}/"
+        url = (f"{host}{path}/{RAINVIEWER_SIZE}/{zoom}/"
                f"{center_lat:.4f}/{center_lon:.4f}/{RAINVIEWER_OPTIONS}.png")
         try:
             frame = requests.get(url, headers={"User-Agent": user_agent},
