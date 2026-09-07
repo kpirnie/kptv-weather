@@ -10,7 +10,6 @@
 [![Debian](https://img.shields.io/badge/Base-Debian%20Trixie-A81D33?logo=debian&logoColor=white&style=for-the-badge&labelColor=000)](https://www.debian.org/)
 [![Kevin Pirnie](https://img.shields.io/badge/-KevinPirnie.com-000d2d?style=for-the-badge&labelColor=000&logoColor=white&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz4KICA8ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjQuNSIgcnk9IjEwIi8+CiAgPGxpbmUgeDE9IjIiIHkxPSIxMiIgeDI9IjIyIiB5Mj0iMTIiLz4KICA8bGluZSB4MT0iNC41IiB5MT0iNi41IiB4Mj0iMTkuNSIgeTI9IjYuNSIvPgogIDxsaW5lIHgxPSI0LjUiIHkxPSIxNy41IiB4Mj0iMTkuNSIgeTI9IjE3LjUiLz4KPC9zdmc+Cg==)](https://kevinpirnie.com/)
 
-
 A self-hosted, TV-style weather channel in a container. It renders its own
 broadcast graphics, encodes them to H.264, and serves one continuous MPEG-TS
 channel over HTTP that any number of clients can pull at once.
@@ -56,7 +55,7 @@ pin one explicitly. `auto` is the default and is usually right.
 ## Endpoints
 
 | Path | What it serves |
-|---|---|
+| --- | --- |
 | `/stream.ts` | The continuous MPEG-TS channel |
 | `/playlist.m3u8` | A one-entry playlist pointing at the stream |
 | `/health`, `/status` | JSON: client count, bytes served, channel name |
@@ -77,7 +76,7 @@ actually use rather than the one they happened to reach the container on.
 The channel cycles through eight pages, about fourteen seconds each:
 
 | Page | Contents |
-|---|---|
+| --- | --- |
 | Current Conditions | Oversized temperature, condition icon, high and low, sun times, eight readings |
 | 12-Hour Trend | Temperature curve with precipitation chance and cloud cover |
 | 7-Day Forecast | Day cards with icons, highs and lows on a shared range bar, plus precipitation, humidity, wind and UV |
@@ -116,7 +115,7 @@ Give it a ZIP code, a latitude and longitude pair, or a place name. One of the
 three is required.
 
 | Variable | Default | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `KPTVW_ZIP` | | Five digit US ZIP |
 | `KPTVW_LAT`, `KPTVW_LON` | | Decimal degrees, for anywhere else |
 | `KPTVW_LOCATION_NAME` | | On-screen name; also usable as a geocoding input |
@@ -125,14 +124,14 @@ three is required.
 ### Channel
 
 | Variable | Default | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `KPTVW_CHANNEL_NAME` | `Weather` | Shown in the header and the playlist |
 | `KPTVW_CHANNEL_LOGO` | | A `tvg-logo` URL for the playlist entry |
 
 ### Encoder
 
 | Variable | Default |
-|---|---|
+| --- | --- |
 | `KPTVW_FFMPEG_PATH` | `/usr/local/bin/ffmpeg` |
 | `KPTVW_ENCODER` | `auto` |
 | `KPTVW_ENCODER_PRESET` | `veryfast` |
@@ -144,7 +143,7 @@ three is required.
 ### Service
 
 | Variable | Default |
-|---|---|
+| --- | --- |
 | `KPTVW_HTTP_HOST` | `0.0.0.0` |
 | `KPTVW_HTTP_PORT` | `5960` |
 | `KPTVW_STREAM_PATH` | `/stream.ts` |
@@ -154,7 +153,7 @@ three is required.
 ### Data
 
 | Variable | Default | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `KPTVW_UNITS` | `us` | `us`, `ca`, `si`, or `uk` |
 | `KPTVW_DATA_INTERVAL_SEC` | `600` | Forecast refresh |
 | `KPTVW_REGIONAL_INTERVAL_SEC` | `5400` | Nearby city refresh |
@@ -164,9 +163,10 @@ three is required.
 ### Presentation
 
 | Variable | Default |
-|---|---|
+| --- | --- |
 | `KPTVW_PAGE_SECONDS` | `14` |
 | `KPTVW_TICKER_SPEED` | `120` |
+| `KPTVW_SCROLL_SPEED` | `60` |
 | `KPTVW_MUSIC_DIR` | `/music` |
 | `KPTVW_MUSIC_VOLUME` | `50` |
 | `KPTVW_RSS_URLS` | |
