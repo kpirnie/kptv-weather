@@ -33,6 +33,22 @@ PANEL_LINE = (54, 72, 108, 255)
 ACCENT = (56, 168, 236, 255)
 ACCENT_DIM = (32, 104, 150, 255)
 
+# the warm secondary the redesign leans on for live values and highlights
+HIGHLIGHT = (246, 148, 46, 255)
+HIGHLIGHT_DIM = (154, 88, 24, 255)
+
+# the backdrop gradient, top to bottom
+BACKGROUND_TOP = (14, 22, 44, 255)
+BACKGROUND_BOTTOM = (5, 8, 17, 255)
+
+# the card gradient, and the hairline that separates stacked rows
+CARD_TOP = (26, 38, 66, 238)
+CARD_BOTTOM = (16, 24, 44, 238)
+CARD_LINE = (44, 60, 94, 255)
+
+# the corner radius the redesign draws its panels at, as designed at 1080p
+RADIUS = 14
+
 # alerting
 ALERT = (232, 96, 64, 255)
 ALERT_DIM = (150, 56, 36, 255)
@@ -192,3 +208,21 @@ def with_alpha(color: tuple, alpha: int) -> tuple:
 
     # keep the rgb, swap the alpha
     return (color[0], color[1], color[2], max(0, min(255, int(alpha))))
+
+def mix(first: tuple, second: tuple, ratio: float) -> tuple:
+    """
+    Blend two colours together
+
+    @param first: tuple The colour at a ratio of zero
+    @param second: tuple The colour at a ratio of one
+    @param ratio: float Where between them to land, 0.0 to 1.0
+    @return tuple: The blended colour
+    """
+
+    # clamp the position and walk the channels
+    position = max(0.0, min(1.0, float(ratio)))
+    return tuple(
+        int(round(first[channel] +
+                  (second[channel] - first[channel]) * position))
+        for channel in range(4)
+    )
