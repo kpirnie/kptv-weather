@@ -40,13 +40,11 @@ RAINVIEWER_ATTRIBUTION = "RainViewer"
 # how the RainViewer tiles are asked for: colour scheme, smoothing, and snow
 RAINVIEWER_OPTIONS = "2/1_1"
 
-# the composite endpoint only serves a fixed set of sizes, so we take the
-# largest and scale it into whatever box the page actually draws into
-RAINVIEWER_SIZE = 512
-
-# their public tiles stop here, and anything deeper comes back as a
-# placeholder image reading zoom level not supported
+# their tiles are the standard square, and their public grid stops here,
+# so anything deeper is fetched at this level and scaled up instead
+RAINVIEWER_TILE = 256
 RAINVIEWER_MAX_ZOOM = 7
+
 
 def fetch_noaa(south: float, west: float, north: float, east: float,
                width: int, height: int, user_agent: str = "kptv-weather/1.0",
@@ -157,21 +155,24 @@ def _coverage(image: Image.Image) -> float:
     return lit / float(len(data) or 1)
 
 
-def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
-                     height: int, user_agent: str = "kptv-weather/1.0",
-                     span_degrees: float = 3.0, max_frames: int = 6) -> list:
+def fetch_rainviewer(south: float, west: float, north: float, east: float,
+                     width: int, height: int,
+                     user_agent: str = "kptv-weather/1.0",
+                     max_frames: int = 6) -> list:
     """
-    Fetch a RainViewer loop centred on a point
+    Fetch a RainViewer loop for a bounding box
 
-    RainViewer serves single map images by centre and zoom rather than by
-    bounding box, so the span is converted into the nearest zoom level.
+    Their tiles are served on the standard web mercator grid, so the loop is
+    stitched and cropped to the same box the backdrop covers, which is what
+    keeps the echoes sitting over the right ground.
 
-    @param center_lat: float Centre latitude
-    @param center_lon: float Centre longitude
+    @param south: float Southern edge
+    @param west: float Western edge
+    @param north: float Northern edge
+    @param east: float Eastern edge
     @param width: int Frame width in pixels
     @param height: int Frame height in pixels
     @param user_agent: str Sent with every request
-    @param span_degrees: float How much latitude the frame should cover
     @param max_frames: int How many frames to build
     @return list: Frame dicts of image, label, timestamp, and coverage
     """
@@ -193,13 +194,10 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
     if not host or not isinstance(past, list) or not past:
         return []
 
-    # work the zoom out from the span we were asked to cover, against the
-    # size we actually request rather than the size we draw at, then clamp
-    # it to what their public tiles will actually serve
-    zoom = min(RAINVIEWER_MAX_ZOOM,
-               _zoom_for_span(span_degrees, RAINVIEWER_SIZE))
+    # the deepest level their grid will serve that still covers the box
+    zoom = _tile_zoom(south, west, north, east, width, height)
 
-    # take the tail of the loop and fetch each one
+    # take the tail of the loop and stitch each one
     out: list = []
     for entry in past[-max(1, int(max_frames)):]:
         path = str((entry or {}).get("path") or "").strip()
@@ -207,21 +205,11 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
         if not path:
             continue
 
-        # RainViewer composes the whole frame for us
-        url = (f"{host}{path}/{RAINVIEWER_SIZE}/{zoom}/"
-               f"{center_lat:.4f}/{center_lon:.4f}/{RAINVIEWER_OPTIONS}.png")
-        try:
-            frame = requests.get(url, headers={"User-Agent": user_agent},
-                                 timeout=20)
-            frame.raise_for_status()
-            with Image.open(io.BytesIO(frame.content)) as handle:
-                image = handle.convert("RGBA")
-        except (requests.RequestException, OSError, ValueError) as exc:
-            logger.debug("RainViewer frame %s failed: %s", path, exc)
+        # stitch the tiles that cover the box and crop to it exactly
+        image = _rainviewer_mosaic(host, path, zoom, south, west, north, east,
+                                   width, height, user_agent)
+        if image is None:
             continue
-
-        # crop the square frame down to the box we actually draw into
-        image = _fit(image, width, height)
         out.append({
             "image": image,
             "label": _label(stamp),
@@ -231,48 +219,154 @@ def fetch_rainviewer(center_lat: float, center_lon: float, width: int,
     return out
 
 
-def _zoom_for_span(span_degrees: float, height: int) -> int:
+def _rainviewer_mosaic(host: str, path: str, zoom: int, south: float,
+                       west: float, north: float, east: float, width: int,
+                       height: int,
+                       user_agent: str) -> Optional[Image.Image]:
     """
-    Convert a latitude span into a web mercator zoom level
+    Stitch one RainViewer frame across a bounding box
 
-    @param span_degrees: float How much latitude to cover
-    @param height: int The frame height in pixels
-    @return int: A zoom level between two and ten
-    """
-
-    # a tile is 256 pixels and covers 360 degrees at zoom zero
-    try:
-        tiles = max(0.01, height / 256.0)
-        zoom = math.log2(360.0 * tiles / max(0.01, span_degrees))
-    except ValueError:
-        return 6
-    return max(2, min(10, int(round(zoom))))
-
-
-def _fit(image: Image.Image, width: int, height: int) -> Image.Image:
-    """
-    Crop a square frame to the target aspect and size
-
-    @param image: Image The fetched frame
-    @param width: int Target width
-    @param height: int Target height
-    @return Image: The cropped and scaled frame
+    @param host: str The tile host from the index
+    @param path: str The frame's path from the index
+    @param zoom: int The zoom level to fetch at
+    @param south: float Southern edge
+    @param west: float Western edge
+    @param north: float Northern edge
+    @param east: float Eastern edge
+    @param width: int Frame width in pixels
+    @param height: int Frame height in pixels
+    @param user_agent: str Sent with every request
+    @return Image|None: The frame, or None when nothing could be fetched
     """
 
-    # already right
-    if image.size == (width, height):
-        return image
+    # where the box lands on the tile grid
+    left_x = _lon_to_x(west, zoom)
+    right_x = _lon_to_x(east, zoom)
+    top_y = _lat_to_y(north, zoom)
+    bottom_y = _lat_to_y(south, zoom)
+    first_x, last_x = int(math.floor(left_x)), int(math.floor(right_x))
+    first_y, last_y = int(math.floor(top_y)), int(math.floor(bottom_y))
 
-    # scale so the shorter side covers, then centre crop the excess
-    scale = max(width / image.width, height / image.height)
-    resized = image.resize(
-        (max(1, int(round(image.width * scale))),
-         max(1, int(round(image.height * scale)))),
-        Image.LANCZOS,
+    # the canvas those tiles fill
+    span = 2 ** zoom
+    columns = last_x - first_x + 1
+    rows = last_y - first_y + 1
+    mosaic = Image.new("RGBA", (columns * RAINVIEWER_TILE,
+                                rows * RAINVIEWER_TILE), (0, 0, 0, 0))
+
+    # fetch each one, treating a miss as simply an empty square
+    fetched = 0
+    for column in range(columns):
+        for row in range(rows):
+            tile_x = (first_x + column) % span
+            tile_y = first_y + row
+            if tile_y < 0 or tile_y >= span:
+                continue
+            tile = _rainviewer_tile(host, path, zoom, tile_x, tile_y,
+                                    user_agent)
+            if tile is None:
+                continue
+            mosaic.paste(tile, (column * RAINVIEWER_TILE,
+                                row * RAINVIEWER_TILE), tile)
+            fetched += 1
+
+    # nothing came back at all
+    if not fetched:
+        return None
+
+    # crop the canvas back to the box and scale it to the frame
+    crop = (
+        int(round((left_x - first_x) * RAINVIEWER_TILE)),
+        int(round((top_y - first_y) * RAINVIEWER_TILE)),
+        int(round((right_x - first_x) * RAINVIEWER_TILE)),
+        int(round((bottom_y - first_y) * RAINVIEWER_TILE)),
     )
-    left = max(0, (resized.width - width) // 2)
-    top = max(0, (resized.height - height) // 2)
-    return resized.crop((left, top, left + width, top + height))
+    if crop[2] <= crop[0] or crop[3] <= crop[1]:
+        return None
+    return mosaic.crop(crop).resize((max(1, int(width)), max(1, int(height))),
+                                    Image.LANCZOS)
+
+
+def _rainviewer_tile(host: str, path: str, zoom: int, tile_x: int, tile_y: int,
+                     user_agent: str) -> Optional[Image.Image]:
+    """
+    Fetch one RainViewer tile
+
+    @param host: str The tile host from the index
+    @param path: str The frame's path from the index
+    @param zoom: int The zoom level
+    @param tile_x: int The tile column
+    @param tile_y: int The tile row
+    @param user_agent: str Sent with the request
+    @return Image|None: The tile, or None when it could not be fetched
+    """
+
+    # their standard tile endpoint
+    url = (f"{host}{path}/{RAINVIEWER_TILE}/{zoom}/{tile_x}/{tile_y}/"
+           f"{RAINVIEWER_OPTIONS}.png")
+    try:
+        resp = requests.get(url, headers={"User-Agent": user_agent},
+                            timeout=20)
+        resp.raise_for_status()
+        with Image.open(io.BytesIO(resp.content)) as handle:
+            return handle.convert("RGBA")
+    except (requests.RequestException, OSError, ValueError) as exc:
+        logger.debug("RainViewer tile %s failed: %s", url, exc)
+        return None
+
+
+def _tile_zoom(south: float, west: float, north: float, east: float,
+               width: int, height: int) -> int:
+    """
+    Choose the deepest zoom that still covers a box at the requested size
+
+    @param south: float Southern edge
+    @param west: float Western edge
+    @param north: float Northern edge
+    @param east: float Eastern edge
+    @param width: int Frame width in pixels
+    @param height: int Frame height in pixels
+    @return int: A zoom level their public grid will serve
+    """
+
+    # step back down from their deepest level until the box fits
+    for zoom in range(RAINVIEWER_MAX_ZOOM, 1, -1):
+        span_x = (_lon_to_x(east, zoom) - _lon_to_x(west, zoom)) * \
+            RAINVIEWER_TILE
+        span_y = (_lat_to_y(south, zoom) - _lat_to_y(north, zoom)) * \
+            RAINVIEWER_TILE
+        if span_x <= width * 1.6 and span_y <= height * 1.6:
+            return zoom
+    return 2
+
+
+def _lon_to_x(lon: float, zoom: int) -> float:
+    """
+    Convert a longitude to a fractional tile x
+
+    @param lon: float Longitude in decimal degrees
+    @param zoom: int The zoom level
+    @return float: The fractional tile column
+    """
+
+    # the standard web mercator transform
+    return (lon + 180.0) / 360.0 * (2 ** zoom)
+
+
+def _lat_to_y(lat: float, zoom: int) -> float:
+    """
+    Convert a latitude to a fractional tile y
+
+    @param lat: float Latitude in decimal degrees
+    @param zoom: int The zoom level
+    @return float: The fractional tile row
+    """
+
+    # clamp to the mercator limit before projecting
+    clamped = max(-85.0511, min(85.0511, lat))
+    radians = math.radians(clamped)
+    projected = math.log(math.tan(radians) + 1.0 / math.cos(radians))
+    return (1.0 - projected / math.pi) / 2.0 * (2 ** zoom)
 
 
 def _label(stamp) -> str:
@@ -309,3 +403,4 @@ def bounds_around(lat: float, lon: float, span_lat: float = 3.0) -> tuple:
     span_lon = span_lat / max(0.2, math.cos(math.radians(lat)))
     return (lat - span_lat / 2.0, lon - span_lon / 2.0,
             lat + span_lat / 2.0, lon + span_lon / 2.0)
+            

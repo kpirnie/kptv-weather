@@ -315,21 +315,40 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
         frames: list = []
         source = None
 
+        # the box we want covered
+        box = radar_sources.bounds_around(lat, lon, span_lat=3.0)
+        frames: list = []
+        source = None
+
+        # the backdrop first, its snapped bounds are what every overlay has
+        # to be requested for or the two will not line up
+        base, aligned = radar_base(box, width, height)
+
+        def composite(loop: list) -> list:
+            """
+            Lay a bare reflectivity loop over the base map
+
+            @param loop: list The fetched frames
+            @return list: The same frames, composited
+            """
+
+            # nothing to lay them over
+            if not loop or base is None:
+                return loop
+
+            # each frame gets the backdrop under it
+            for frame in loop:
+                overlay = frame["image"]
+                if overlay.size != base.size:
+                    overlay = overlay.resize(base.size, Image.LANCZOS)
+                frame["image"] = Image.alpha_composite(base, overlay)
+            return loop
+
         # NOAA first where it is wanted
         if cfg.radar_source in ("noaa", "auto"):
-
-            # fetch the backdrop first, its snapped bounds are what the
-            # overlay has to be requested for or the two will not line up
-            base, aligned = radar_base(box, width, height)
             frames = radar_sources.fetch_noaa(aligned[0], aligned[1], aligned[2],
                                               aligned[3], width, height,
                                               cfg.user_agent)
-            if frames and base is not None:
-                for frame in frames:
-                    overlay = frame["image"]
-                    if overlay.size != base.size:
-                        overlay = overlay.resize(base.size, Image.LANCZOS)
-                    frame["image"] = Image.alpha_composite(base, overlay)
             if frames:
                 source = radar_sources.NOAA_ATTRIBUTION
 
@@ -339,21 +358,14 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
                     if cfg.radar_source == "auto":
                         logger.info("NOAA returned no echoes, trying RainViewer")
                         frames, source = [], None
+                else:
+                    frames = composite(frames)
 
         # then RainViewer as the worldwide fallback
         if not frames and cfg.radar_source in ("rainviewer", "auto", "noaa"):
-            frames = radar_sources.fetch_rainviewer(lat, lon, width, height,
-                                                    cfg.user_agent)
-
-            # these come back as bare reflectivity too, so they need the same
-            # backdrop under them or an empty sky renders as an empty box
-            base, _aligned = radar_base(box, width, height)
-            if frames and base is not None:
-                for frame in frames:
-                    overlay = frame["image"]
-                    if overlay.size != base.size:
-                        overlay = overlay.resize(base.size, Image.LANCZOS)
-                    frame["image"] = Image.alpha_composite(base, overlay)
+            frames = composite(radar_sources.fetch_rainviewer(
+                aligned[0], aligned[1], aligned[2], aligned[3], width, height,
+                cfg.user_agent))
             if frames:
                 source = radar_sources.RAINVIEWER_ATTRIBUTION
 
