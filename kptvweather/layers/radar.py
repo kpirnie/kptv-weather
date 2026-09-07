@@ -85,9 +85,9 @@ class RadarLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the panel
-        draw.panel(pen, (0, 0, width, height))
-        draw.accent_bar(pen, (0, 0, width, max(2, self.s(4))))
+        # the card
+        draw.card(self.surface, (0, 0, width, height), self.scale,
+                  accent=theme.HIGHLIGHT)
 
         # nothing fetched yet
         if not self._frames:

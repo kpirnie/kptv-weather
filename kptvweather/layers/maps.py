@@ -76,9 +76,9 @@ class _MapLayer(Layer):
         pen = ImageDraw.Draw(self.surface)
         width, height = self.surface.size
 
-        # the panel
-        draw.panel(pen, (0, 0, width, height))
-        draw.accent_bar(pen, (0, 0, width, max(2, self.s(4))))
+        # the card
+        draw.card(self.surface, (0, 0, width, height), self.scale,
+                  accent=theme.HIGHLIGHT)
 
         # the map area
         inset = self.s(16, 4)
@@ -170,7 +170,7 @@ class _MapLayer(Layer):
                 x + text_w // 2 + pad, y + text_h // 2 + pad)
         draw.panel(pen, chip, fill=theme.with_alpha(theme.PANEL, 240),
                    outline=theme.temp_color(point.get("temp_f")),
-                   width=max(2, self.s(3)))
+                   radius=max(3, self.s(8)), width=max(2, self.s(3)))
         draw.text(pen, (x, y), value, face,
                   theme.temp_color(point.get("temp_f")), anchor="mm")
 
