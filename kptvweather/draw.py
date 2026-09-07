@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PIL import ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 from . import theme
 
@@ -121,6 +121,96 @@ def panel(pen: ImageDraw.ImageDraw, box: tuple, fill: tuple = theme.PANEL,
     else:
         pen.rectangle(box, fill=fill, outline=outline, width=width)
 
+
+
+def gradient(surface: Image.Image, box: tuple, top_color: tuple,
+             bottom_color: tuple, radius: int = 0) -> None:
+    """
+    Fill a box with a vertical gradient, optionally rounded
+
+    Painted a row at a time into a scratch image and pasted through a mask,
+    which keeps the corners clean without touching the surface underneath.
+
+    @param surface: Image The surface to paint onto
+    @param box: tuple Left, top, right, and bottom
+    @param top_color: tuple The colour at the top edge
+    @param bottom_color: tuple The colour at the bottom edge
+    @param radius: int Corner radius, zero for square corners
+    @return None
+    """
+
+    # a degenerate box has nothing to fill
+    left, top, right, bottom = (int(value) for value in box)
+    width, height = right - left, bottom - top
+    if width <= 0 or height <= 0:
+        return
+
+    # walk the rows, blending as we go
+    tile = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    pen = ImageDraw.Draw(tile)
+    span = max(1, height - 1)
+    for row in range(height):
+        pen.line([(0, row), (width, row)],
+                 fill=theme.mix(top_color, bottom_color, row / span))
+
+    # square corners paste straight on, rounded ones go through a mask
+    if radius > 0:
+        mask = Image.new("L", (width, height), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, width - 1, height - 1), radius=radius, fill=255
+        )
+        surface.paste(tile, (left, top), mask)
+    else:
+        surface.paste(tile, (left, top), tile)
+
+
+def card(surface: Image.Image, box: tuple, scale: float,
+         accent: Optional[tuple] = None,
+         top_color: tuple = theme.CARD_TOP,
+         bottom_color: tuple = theme.CARD_BOTTOM,
+         outline: Optional[tuple] = theme.CARD_LINE) -> None:
+    """
+    Draw one of the rounded gradient cards the pages are built from
+
+    @param surface: Image The surface to paint onto
+    @param box: tuple Left, top, right, and bottom
+    @param scale: float The output scale factor
+    @param accent: tuple|None Colour for the rule along the top edge
+    @param top_color: tuple The gradient's top stop
+    @param bottom_color: tuple The gradient's bottom stop
+    @param outline: tuple|None The hairline border colour, or None
+    @return None
+    """
+
+    # a degenerate box would raise rather than simply draw nothing
+    left, top, right, bottom = (int(value) for value in box)
+    if right <= left or bottom <= top:
+        return
+
+    # the body
+    radius = max(4, int(round(theme.RADIUS * scale)))
+    gradient(surface, (left, top, right, bottom), top_color, bottom_color,
+             radius)
+
+    # the hairline that lifts it off the backdrop
+    pen = ImageDraw.Draw(surface)
+    if outline is not None:
+        pen.rounded_rectangle((left, top, right - 1, bottom - 1),
+                              radius=radius, outline=outline, width=1)
+
+    # and the accent rule, clipped to the rounded top corners
+    if accent is None:
+        return
+    rule = max(2, int(round(4 * scale)))
+    strip = Image.new("RGBA", (right - left, bottom - top), (0, 0, 0, 0))
+    ImageDraw.Draw(strip).rectangle((0, 0, right - left, rule), fill=accent)
+    mask = Image.new("L", (right - left, bottom - top), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, right - left - 1, bottom - top - 1), radius=radius, fill=255
+    )
+    surface.paste(strip, (left, top), Image.composite(
+        mask, Image.new("L", mask.size, 0), strip.split()[3]
+    ))
 
 def accent_bar(pen: ImageDraw.ImageDraw, box: tuple,
                color: tuple = theme.ACCENT) -> None:
