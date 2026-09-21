@@ -67,6 +67,10 @@ class TickerLayer(Layer):
         # the rendered text strip, its cache key, and where we are in it
         self._strip: Image.Image = None
         self._strip_key = None
+        
+        # the pre-rendered card and badge, and the key they were built for
+        self._chrome: Image.Image = None
+        self._chrome_key = None
         self._offset = 0.0
 
     def _label_width(self) -> int:
@@ -111,6 +115,42 @@ class TickerLayer(Layer):
         self._strip_key = key
         self._span = span
 
+
+    def _build_chrome(self, label: str, accent: tuple, key) -> None:
+        """
+        Render the card and its badge once, so each frame is only a paste
+
+        @param label: str The category badge text
+        @param accent: tuple The badge fill
+        @param key: mixed The cache key this chrome was built for
+        @return None
+        """
+
+        # its own canvas, the same size as the surface it stands in for
+        width, height = self.surface.size
+        chrome = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(chrome)
+
+        # the strip body and the badge that heads it
+        draw.card(chrome, (0, 0, width, height), self.scale)
+        badge_w = self._label_width()
+        radius = max(4, self.s(theme.RADIUS))
+        draw.panel(pen, (0, 0, badge_w, height), fill=accent, outline=None,
+                   radius=radius)
+        draw.panel(pen, (badge_w - radius, 0, badge_w, height), fill=accent,
+                   outline=None)
+        draw.accent_bar(pen, (badge_w, 0, badge_w + max(2, self.s(3)), height),
+                        color=theme.HIGHLIGHT)
+        badge_face = draw.fit_face(pen, label, "black",
+                                   max(10, int(round(height * 0.40))),
+                                   badge_w - self.s(16, 4))
+        draw.text(pen, (badge_w // 2, height // 2), label, badge_face,
+                  theme.TEXT, anchor="mm")
+
+        # keep it
+        self._chrome = chrome
+        self._chrome_key = key
+
     def tick(self, now: float) -> bool:
         """
         Advance the scroll and repaint the strip
@@ -136,29 +176,19 @@ class TickerLayer(Layer):
         if self._span > 0:
             self._offset %= self._span
 
-        # start clean
-        self.clear()
-        pen = ImageDraw.Draw(self.surface)
+        # the card and badge only move when the label or the accent does
         width, height = self.surface.size
+        chrome_key = (label, accent, self.surface.size)
+        if self._chrome is None or chrome_key != self._chrome_key:
+            self._build_chrome(label, accent, chrome_key)
 
-        # the strip body and the badge that heads it
-        draw.card(self.surface, (0, 0, width, height), self.scale)
-        badge_w = self._label_width()
-        radius = max(4, self.s(theme.RADIUS))
-        draw.panel(pen, (0, 0, badge_w, height), fill=accent, outline=None,
-                   radius=radius)
-        draw.panel(pen, (badge_w - radius, 0, badge_w, height), fill=accent,
-                   outline=None)
-        draw.accent_bar(pen, (badge_w, 0, badge_w + max(2, self.s(3)), height),
-                        color=theme.HIGHLIGHT)
-        badge_face = draw.fit_face(pen, label, "black",
-                                   max(10, int(round(height * 0.40))),
-                                   badge_w - self.s(16, 4))
-        draw.text(pen, (badge_w // 2, height // 2), label, badge_face,
-                  theme.TEXT, anchor="mm")
+        # start from the pre-rendered chrome rather than repainting it
+        self.surface.paste(self._chrome, (0, 0))
 
         # then the scrolling text, clipped to what is left
+        badge_w = self._label_width()
         window_w = max(1, width - badge_w - self.s(16, 4))
+
         left = int(self._offset)
         window = self._strip.crop((left, 0, left + window_w, height))
         self.surface.paste(window, (badge_w + self.s(16, 4), 0), window)
