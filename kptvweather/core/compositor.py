@@ -33,8 +33,8 @@ class Compositor:
 
         # the surface size and the pair of buffers we swap between
         self.w, self.h = int(w), int(h)
-        self.front = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
-        self.back = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
+        self.front = Image.new("RGB", (self.w, self.h), (0, 0, 0))
+        self.back = Image.new("RGB", (self.w, self.h), (0, 0, 0))
 
         # the flattened backdrop of everything that is not animating
         self._base = None
@@ -61,8 +61,8 @@ class Compositor:
         # which is what makes compositing on every frame affordable
         if static_dirty or self._base is None:
             if self._base is None:
-                self._base = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 255))
-            self._base.paste((0, 0, 0, 255), (0, 0, self.w, self.h))
+                self._base = Image.new("RGB", (self.w, self.h), (0, 0, 0))
+            self._base.paste((0, 0, 0), (0, 0, self.w, self.h))
             for layer in layers:
                 if getattr(layer, "per_frame", False):
                     continue

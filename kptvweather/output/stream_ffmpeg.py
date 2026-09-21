@@ -2,9 +2,9 @@
 """
 FFmpeg Streaming Module
 
-Runs the external ffmpeg binary as a long-lived encoder: raw RGBA frames go
-in on stdin, mpeg transport stream comes back out on stdout, and a reader
-thread pumps that into the fanout broker.
+Runs the external ffmpeg binary as a long-lived encoder: Runs the external ffmpeg 
+binary as a long-lived encoder: raw RGB frames go in on stdin, mpeg transport 
+stream comes back out on stdout, and a reader thread pumps that into the fanout broker.
 
 ffmpeg is never bundled with this project. A static binary must be bind
 mounted into the container and its path passed in.
@@ -31,6 +31,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
 
+# setup the logger
 logger = logging.getLogger(__name__)
 
 # how much we read off the encoder at a time
@@ -432,7 +433,7 @@ class FFMPEGStreamer:
             "-fflags", "+genpts",
             "-thread_queue_size", "8192",
             "-f", "rawvideo",
-            "-pix_fmt", "rgba",
+            "-pix_fmt", "rgb24",
             "-s", f"{self.width}x{self.height}",
             "-r", str(self.fps),
             "-i", "-",
