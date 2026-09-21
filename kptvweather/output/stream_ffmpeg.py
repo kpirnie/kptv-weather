@@ -45,6 +45,10 @@ HW_ORDER = ("h264_nvenc", "h264_qsv", "h264_vaapi")
 # which is all the cpu has left to do once this is in
 CUDA_CHAIN = "format=bgr0,hwupload_cuda,scale_cuda=format=nv12"
 
+# the same trick for vaapi: upload the packed frame and let the card do the
+# colorspace conversion instead of swscale doing it on the way in
+VAAPI_CHAIN = "format=bgr0,hwupload,scale_vaapi=format=nv12"
+
 class FFMPEGStreamer:
     """
     Long-lived ffmpeg encoder feeding the fanout broker
@@ -215,8 +219,15 @@ class FFMPEGStreamer:
             device = self._render_node()
             if device:
                 pre = ["-vaapi_device", device]
+
+            # the same swscale cost the nvenc path avoids, avoided the same
+            # way when the build and the driver between them can do it
+            chain = "format=nv12,hwupload"
+            if device and self._vaapi_filters_functional(VAAPI_CHAIN, device):
+                logger.info("converting on the gpu: %s", VAAPI_CHAIN)
+                chain = VAAPI_CHAIN
             args = [
-                "-vf", "format=nv12,hwupload",
+                "-vf", chain,
                 "-c:v", "h264_vaapi",
             ]
 
@@ -347,6 +358,41 @@ class FFMPEGStreamer:
             "-frames:v", "1",
             "-vf", chain,
             "-c:v", "h264_nvenc",
+            "-f", "null", "-",
+        ]
+
+        # run it and see whether it came back clean
+        try:
+            result = subprocess.run(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    @lru_cache(maxsize=None)
+    def _vaapi_filters_functional(self, chain: str, device: str) -> bool:
+        """
+        Prove a vaapi filter chain works before the stream depends on it
+
+        @param chain: str The filter chain to test
+        @param device: str The render node to hand the filters
+        @return bool: True when the test encode succeeded
+        """
+
+        # no binary, nothing to test
+        if not self._ffmpeg_exists():
+            return False
+
+        # one frame through the real chain, into the real encoder
+        cmd = [
+            self.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y",
+            "-vaapi_device", device,
+            "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
+            "-frames:v", "1",
+            "-vf", chain,
+            "-c:v", "h264_vaapi",
             "-f", "null", "-",
         ]
 
