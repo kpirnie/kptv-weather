@@ -312,11 +312,6 @@ def make_datastore(cfg: Config, client: OpenMeteoClient, alerts: NWSAlertClient,
         frames: list = []
         source = None
 
-        # the box we want covered
-        box = radar_sources.bounds_around(lat, lon, span_lat=3.0)
-        frames: list = []
-        source = None
-
         # the backdrop first, its snapped bounds are what every overlay has
         # to be requested for or the two will not line up
         base, aligned = radar_base(box, width, height)
@@ -666,8 +661,7 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
         RegionalLayer(
             x=b[0], y=b[1], w=b[2], h=b[3],
             get_points=lambda: read("regional_points", []) or [],
-            get_map=lambda: (lambda im: im.copy() if im is not None else None)(
-                store.read().get("regional_map_image")),
+            get_map=lambda: store.read().get("regional_map_image"),
             get_bounds=lambda: store.read().get("regional_map_bounds"),
             min_interval=20.0, scale=scale,
         )
@@ -677,8 +671,7 @@ def build_layers(cfg: Config, store: DataStore, width: int, height: int,
         ForecastMapLayer(
             x=b[0], y=b[1], w=b[2], h=b[3],
             get_points=lambda: read("forecast_points", []) or [],
-            get_map=lambda: (lambda im: im.copy() if im is not None else None)(
-                store.read().get("forecast_map_image")),
+            get_map=lambda: store.read().get("forecast_map_image"),
             get_bounds=lambda: store.read().get("forecast_map_bounds"),
             min_interval=20.0, scale=scale,
         )
