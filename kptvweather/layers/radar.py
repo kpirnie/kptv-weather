@@ -73,6 +73,10 @@ class RadarLayer(Layer):
         @return bool: True when the surface changed
         """
 
+        # hidden pages cost nothing
+        if not self.visible:
+            return False
+
         # pick up anything the fetcher has produced since last time
         fresh = self.get_new_frames() or []
         if fresh:
