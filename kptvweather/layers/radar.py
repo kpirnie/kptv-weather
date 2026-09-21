@@ -65,6 +65,10 @@ class RadarLayer(Layer):
         self._index = 0
         self._held = 0
 
+        # whether we have painted at all, and the credit we painted last
+        self._drawn = False
+        self._source = ""
+
     def tick(self, now: float) -> bool:
         """
         Advance the loop and repaint
@@ -84,6 +88,23 @@ class RadarLayer(Layer):
             self._index = 0
             self._held = 0
 
+        # hold each frame for a few ticks so the loop is watchable
+        moved = bool(fresh)
+        if self._frames:
+            self._held += 1
+            if self._held >= self.frame_hold:
+                self._held = 0
+                self._index = (self._index + 1) % len(self._frames)
+                moved = True
+
+        # the ticks the loop does not move on cost nothing, and repainting
+        # on them would rebuild the whole composited backdrop for nothing
+        source = str(self.get_source() or "")
+        if self._drawn and not moved and source == self._source:
+            return False
+        self._drawn = True
+        self._source = source
+
         # start clean
         self.clear()
         pen = ImageDraw.Draw(self.surface)
@@ -99,12 +120,6 @@ class RadarLayer(Layer):
             draw.text(pen, (width // 2, height // 2), "Radar loading\u2026", face,
                       theme.TEXT_DIM, anchor="mm")
             return True
-
-        # hold each frame for a few ticks so the loop is watchable
-        self._held += 1
-        if self._held >= self.frame_hold:
-            self._held = 0
-            self._index = (self._index + 1) % len(self._frames)
 
         # the map area, leaving room for the legend
         inset = self.s(16, 4)
