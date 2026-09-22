@@ -201,7 +201,7 @@ class FFMPEGStreamer:
 
             # nvenc converts rgb on the card, so it gets the frame as it is
             # packed and swscale never sees it
-            self.frame_rawmode = "BGRX"
+            self.frame_rawmode = "RGBX"
 
         # intel quicksync
         elif enc == "h264_qsv":
