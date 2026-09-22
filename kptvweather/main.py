@@ -798,7 +798,7 @@ def main() -> int:
 
         # a write failure must never take the render loop down with it
         try:
-            streamer.send(image.tobytes())
+            streamer.send(image)
         except Exception as exc:
             logger.warning("frame write failed: %r", exc)
         finally:

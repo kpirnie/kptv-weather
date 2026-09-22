@@ -40,10 +40,10 @@ READ_SIZE = 188 * 64
 # hardware encoders we will try before falling back to software, in order
 HW_ORDER = ("h264_nvenc", "h264_qsv", "h264_vaapi")
 
-# moves the pixel format conversion off swscale and onto the card, for the
-# nvenc path only. bgr0 is a byte shuffle rather than a colorspace change,
-# which is all the cpu has left to do once this is in
-CUDA_CHAIN = "format=bgr0,hwupload_cuda,scale_cuda=format=nv12"
+# how a rendered frame is packed on its way to the encoder, and the input
+# pixel format that packing arrives as. nvenc converts rgb on the card, so
+# handing it bgr0 keeps swscale out of the path entirely
+FRAME_PIX_FMT = {"RGB": "rgb24", "BGRX": "bgr0"}
 
 # the same trick for vaapi: upload the packed frame and let the card do the
 # colorspace conversion instead of swscale doing it on the way in
@@ -93,6 +93,9 @@ class FFMPEGStreamer:
         self.height = int(height)
         self.fps = int(fps)
         self.on_output = on_output
+
+        # how present() packs a frame for whichever encoder we land on
+        self.frame_rawmode = "RGB"
 
         # the music bed
         self.music_playlist = music_playlist
@@ -177,6 +180,9 @@ class FFMPEGStreamer:
         pre: list = []
         args: list = []
 
+        # software and vaapi both want plain rgb on the wire
+        self.frame_rawmode = "RGB"
+
         # nvidia
         if enc == "h264_nvenc":
             preset_map = {
@@ -193,14 +199,9 @@ class FFMPEGStreamer:
                 "-delay", "0",
             ]
 
-            # swscale turning every rgba frame into yuv costs more cpu than
-            # the whole renderer does, so hand that to the card when the
-            # build has the cuda filters to do it
-            if self._cuda_filters_functional(CUDA_CHAIN):
-                logger.info("converting on the gpu: %s", CUDA_CHAIN)
-                args += ["-vf", CUDA_CHAIN]
-            else:
-                args += ["-pix_fmt", "yuv420p"]
+            # nvenc converts rgb on the card, so it gets the frame as it is
+            # packed and swscale never sees it
+            self.frame_rawmode = "BGRX"
 
         # intel quicksync
         elif enc == "h264_qsv":
@@ -335,43 +336,6 @@ class FFMPEGStreamer:
             return False
 
     @lru_cache(maxsize=None)
-    def _cuda_filters_functional(self, chain: str) -> bool:
-        """
-        Prove a cuda filter chain works before the stream depends on it
-
-        A build can carry the encoder without carrying the filters, and a
-        chain ffmpeg rejects takes the whole encode down rather than
-        degrading, so it gets the same one frame proof the encoders get.
-
-        @param chain: str The filter chain to test
-        @return bool: True when the test encode succeeded
-        """
-
-        # no binary, nothing to test
-        if not self._ffmpeg_exists():
-            return False
-
-        # one frame through the real chain, into the real encoder
-        cmd = [
-            self.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
-            "-frames:v", "1",
-            "-vf", chain,
-            "-c:v", "h264_nvenc",
-            "-f", "null", "-",
-        ]
-
-        # run it and see whether it came back clean
-        try:
-            result = subprocess.run(
-                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
-
-    @lru_cache(maxsize=None)
     def _vaapi_filters_functional(self, chain: str, device: str) -> bool:
         """
         Prove a vaapi filter chain works before the stream depends on it
@@ -479,7 +443,7 @@ class FFMPEGStreamer:
             "-fflags", "+genpts",
             "-thread_queue_size", "8192",
             "-f", "rawvideo",
-            "-pix_fmt", "rgb24",
+            "-pix_fmt", FRAME_PIX_FMT[self.frame_rawmode],
             "-s", f"{self.width}x{self.height}",
             "-r", str(self.fps),
             "-i", "-",
@@ -684,7 +648,7 @@ class FFMPEGStreamer:
         if isinstance(frame, (bytes, bytearray, memoryview)):
             payload = frame
         elif hasattr(frame, "tobytes"):
-            payload = frame.tobytes()
+            payload = frame.tobytes("raw", self.frame_rawmode)
         else:
             raise TypeError(f"unsupported frame type: {type(frame)!r}")
 

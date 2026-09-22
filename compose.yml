@@ -12,24 +12,24 @@ services:
       - 8.8.4.4
     devices:
       # NVIDIA
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
-      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
-      - /dev/nvidia-modeset:/dev/nvidia-modeset
+#      - /dev/nvidia0:/dev/nvidia0
+#      - /dev/nvidiactl:/dev/nvidiactl
+#      - /dev/nvidia-uvm:/dev/nvidia-uvm
+#      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+#      - /dev/nvidia-modeset:/dev/nvidia-modeset
       # Intel / AMD
       - /dev/dri:/dev/dri
 
     volumes:
       # REQUIRED: a static ffmpeg build
-      - /usr/local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
-      - /usr/local/bin/ffprobe:/usr/local/bin/ffprobe:ro
+      - /usr/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
+      - /usr/bin/ffprobe:/usr/local/bin/ffprobe:ro
       # NVIDIA userspace driver, mounted at the soname the loader looks for.
       # The version on the left is this host's; check with
       # `ls -l /usr/lib/x86_64-linux-gnu/libcuda.so.1`
-      - /usr/lib/x86_64-linux-gnu/libcuda.so.595.84:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
-      - /usr/lib/x86_64-linux-gnu/libnvcuvid.so.595.84:/usr/lib/x86_64-linux-gnu/libnvcuvid.so.1:ro
-      - /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.595.84:/usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1:ro
+#      - /usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+#      - /usr/lib/x86_64-linux-gnu/libnvcuvid.so.595.91.07:/usr/lib/x86_64-linux-gnu/libnvcuvid.so.1:ro
+#      - /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.595.91.07:/usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1:ro
 
     # necessary for hardware support
     group_add:
