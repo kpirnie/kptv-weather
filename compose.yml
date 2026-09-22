@@ -10,20 +10,20 @@ services:
       - 1.0.0.1
       - 8.8.8.8
       - 8.8.4.4
-    devices:
-      # NVIDIA
+#    devices:
+#      # NVIDIA
 #      - /dev/nvidia0:/dev/nvidia0
 #      - /dev/nvidiactl:/dev/nvidiactl
 #      - /dev/nvidia-uvm:/dev/nvidia-uvm
 #      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
 #      - /dev/nvidia-modeset:/dev/nvidia-modeset
       # Intel / AMD
-      - /dev/dri:/dev/dri
+#      - /dev/dri:/dev/dri
 
     volumes:
       # REQUIRED: a static ffmpeg build
-      - /usr/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
-      - /usr/bin/ffprobe:/usr/local/bin/ffprobe:ro
+      - /usr/local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
+      - /usr/local/bin/ffprobe:/usr/local/bin/ffprobe:ro
       # NVIDIA userspace driver, mounted at the soname the loader looks for.
       # The version on the left is this host's; check with
       # `ls -l /usr/lib/x86_64-linux-gnu/libcuda.so.1`
@@ -51,8 +51,9 @@ services:
       # --- encoder ---------------------------------------------------------
       KPTVW_FFMPEG_PATH: "/usr/local/bin/ffmpeg"
       KPTVW_ENCODER: "auto"
-      KPTVW_ENCODER_PRESET: "veryfast"
-      KPTVW_RESOLUTION: "1280x720"
+      KPTVW_ENCODER_PRESET: "ultrafast"
+      #KPTVW_RESOLUTION: "1280x720"
+      KPTVW_RESOLUTION: "960x540"
       KPTVW_FPS: "30"
       KPTVW_VIDEO_KBPS: "3500"
       KPTVW_AUDIO_KBPS: "128"
@@ -63,7 +64,7 @@ services:
       KPTVW_STREAM_PATH: "/stream.ts"
       KPTVW_PLAYLIST_PATH: "/playlist.m3u8"
       # what the playlist advertises; set this when behind a proxy
-      KPTVW_BASE_URL: "http://192.168.2.100:8000"
+      KPTVW_BASE_URL: "http://192.168.2.150:8000"
       KPTVW_MAX_CLIENTS: 4
 
       # --- data ------------------------------------------------------------

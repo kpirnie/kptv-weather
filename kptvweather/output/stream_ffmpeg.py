@@ -43,7 +43,7 @@ HW_ORDER = ("h264_nvenc", "h264_qsv", "h264_vaapi")
 # how a rendered frame is packed on its way to the encoder, and the input
 # pixel format that packing arrives as. nvenc converts rgb on the card, so
 # handing it bgr0 keeps swscale out of the path entirely
-FRAME_PIX_FMT = {"RGB": "rgb24", "BGRX": "bgr0"}
+FRAME_PIX_FMT = {"RGB": "rgb24", "RGBX": "rgb0"}
 
 # the same trick for vaapi: upload the packed frame and let the card do the
 # colorspace conversion instead of swscale doing it on the way in
@@ -95,7 +95,7 @@ class FFMPEGStreamer:
         self.on_output = on_output
 
         # how present() packs a frame for whichever encoder we land on
-        self.frame_rawmode = "RGB"
+        self.frame_rawmode = "RGBX"
 
         # the music bed
         self.music_playlist = music_playlist
