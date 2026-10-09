@@ -47,7 +47,8 @@ FRAME_PIX_FMT = {"RGB": "rgb24", "RGBX": "rgb0"}
 
 # the same trick for vaapi: upload the frame exactly as it is packed and let
 # the card do the colorspace conversion instead of swscale doing it on the way in
-VAAPI_CHAIN = "format=rgb0,hwupload,scale_vaapi=format=nv12"
+VAAPI_CHAIN = ("format=rgb0,hwupload,scale_vaapi=format=nv12"
+               ":out_color_matrix=bt709:out_range=limited")
 
 class FFMPEGStreamer:
     """
