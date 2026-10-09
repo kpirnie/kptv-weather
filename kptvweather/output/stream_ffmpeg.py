@@ -45,9 +45,9 @@ HW_ORDER = ("h264_nvenc", "h264_qsv", "h264_vaapi")
 # handing it bgr0 keeps swscale out of the path entirely
 FRAME_PIX_FMT = {"RGB": "rgb24", "RGBX": "rgb0"}
 
-# the same trick for vaapi: upload the packed frame and let the card do the
-# colorspace conversion instead of swscale doing it on the way in
-VAAPI_CHAIN = "format=bgr0,hwupload,scale_vaapi=format=nv12"
+# the same trick for vaapi: upload the frame exactly as it is packed and let
+# the card do the colorspace conversion instead of swscale doing it on the way in
+VAAPI_CHAIN = "format=rgb0,hwupload,scale_vaapi=format=nv12"
 
 class FFMPEGStreamer:
     """
@@ -232,6 +232,9 @@ class FFMPEGStreamer:
             if device and self._vaapi_filters_functional(VAAPI_CHAIN, device):
                 logger.info("converting on the gpu: %s", VAAPI_CHAIN)
                 chain = VAAPI_CHAIN
+
+                # packed to match the chain, so nothing converts it on the cpu
+                self.frame_rawmode = "RGBX"
             args = [
                 "-vf", chain,
                 "-c:v", "h264_vaapi",
