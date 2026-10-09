@@ -129,6 +129,11 @@ class FFMPEGStreamer:
         self._dropped = 0
         self._drop_logged = 0.0
 
+        # when the encoder may next be relaunched, and how long the wait
+        # after that grows to while it keeps failing
+        self._restart_after = 0.0
+        self._restart_delay = 1.0
+
     # ------------------------- encoder selection -------------------------
 
     def _choose_encoder(self) -> tuple:
@@ -573,6 +578,9 @@ class FFMPEGStreamer:
                 self._proc_dead = True
                 break
 
+            # it is producing output, so the next failure starts the backoff over
+            self._restart_delay = 1.0
+
             # hand it off, never letting a consumer fault kill the pump
             try:
                 self.on_output(data)
@@ -639,7 +647,16 @@ class FFMPEGStreamer:
 
         # bring the encoder back if it died on us
         if self.proc is None or self.proc.poll() is not None or self._proc_dead:
-            logger.warning("encoder is not running, restarting it")
+
+            # back off between attempts so a failing encoder is not
+            # relaunched on every frame
+            now = time.time()
+            if now < self._restart_after:
+                return False
+            logger.warning("encoder is not running, restarting it in %.0fs "
+                           "if this attempt fails", self._restart_delay)
+            self._restart_after = now + self._restart_delay
+            self._restart_delay = min(30.0, self._restart_delay * 2)
             self._restart()
 
         # accept raw bytes or anything that can produce them
