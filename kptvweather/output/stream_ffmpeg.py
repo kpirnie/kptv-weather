@@ -441,7 +441,6 @@ class FFMPEGStreamer:
         cmd += pre_args
         cmd += [
             "-fflags", "+genpts",
-            "-thread_queue_size", "8192",
             "-f", "rawvideo",
             "-pix_fmt", FRAME_PIX_FMT[self.frame_rawmode],
             "-s", f"{self.width}x{self.height}",
@@ -453,7 +452,6 @@ class FFMPEGStreamer:
         music_idx = None
         if self.music_playlist and Path(self.music_playlist).exists():
             cmd += [
-                "-thread_queue_size", "4096",
                 "-stream_loop", "-1",
                 "-f", "concat",
                 "-safe", "0",
